@@ -15,44 +15,64 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            // 背景渐变
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .windowBackgroundColor),
+                    Color(nsColor: .windowBackgroundColor).opacity(0.95)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            
             switch currentPage {
             case .stockList:
                 StockListView(
                     onOpenSettings: {
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             currentPage = .settings
                         }
                     },
                     onOpenPriceAlert: { stock in
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             selectedStockForAlert = stock
                             currentPage = .priceAlert
                         }
                     }
                 )
-                .transition(.move(edge: .leading))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .leading).combined(with: .opacity),
+                    removal: .move(edge: .leading).combined(with: .opacity)
+                ))
                 
             case .settings:
                 SettingsContainerView(onBack: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                         currentPage = .stockList
                     }
                 })
-                .transition(.move(edge: .trailing))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
                 
             case .priceAlert:
                 if let stock = selectedStockForAlert {
                     PriceAlertView(stock: stock) {
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                             currentPage = .stockList
                             selectedStockForAlert = nil
                         }
                     }
-                    .transition(.move(edge: .trailing))
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .trailing).combined(with: .opacity)
+                    ))
                 }
             }
         }
-        .frame(width: 340, height: 450)
+        .frame(width: 360, height: 480)
         .clipped()
     }
 }
@@ -73,6 +93,7 @@ struct StockListView: View {
     private var backgroundService: BackgroundRefreshService { BackgroundRefreshService.shared }
     private var appSettings: AppSettings { AppSettings.shared }
     @State private var isHoveringSettings = false
+    @State private var isHoveringRefresh = false
     
     // 从后台服务获取数据
     private var stocks: [StockData] { backgroundService.stocks }
@@ -86,12 +107,8 @@ struct StockListView: View {
             // 标题栏
             headerView
             
-            Divider()
-            
             // 股票列表
             stockListView
-            
-            Divider()
             
             // 底部操作栏
             footerView
@@ -103,49 +120,85 @@ struct StockListView: View {
     private var headerView: some View {
         HStack(spacing: 12) {
             // Logo 和标题
-            HStack(spacing: 6) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.blue)
-                Text("Stock Reminder")
-                    .font(.system(size: 13, weight: .semibold))
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.blue, Color.blue.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 28, height: 28)
+                    
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Stock Reminder")
+                        .font(.system(size: 13, weight: .semibold))
+                    if appSettings.autoRefreshEnabled && nextRefreshIn > 0 {
+                        Text("\(nextRefreshIn)s 后刷新")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
             }
             
             Spacer()
             
             // 刷新按钮
             Button(action: refreshData) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .rotationEffect(.degrees(isLoading ? 360 : 0))
-                    .animation(isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isLoading)
+                ZStack {
+                    Circle()
+                        .fill(isHoveringRefresh ? Color.blue.opacity(0.1) : Color.clear)
+                        .frame(width: 28, height: 28)
+                    
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(isHoveringRefresh ? .blue : .secondary)
+                        .rotationEffect(.degrees(isLoading ? 360 : 0))
+                        .animation(isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isLoading)
+                }
             }
             .buttonStyle(.plain)
             .disabled(isLoading)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isHoveringRefresh = hovering
+                }
+            }
             
             // 设置按钮
             Button(action: onOpenSettings) {
                 ZStack {
                     Circle()
-                        .fill(isHoveringSettings ? Color.accentColor.opacity(0.15) : Color.clear)
+                        .fill(isHoveringSettings ? Color.accentColor.opacity(0.1) : Color.clear)
                         .frame(width: 28, height: 28)
                     
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: 13))
                         .foregroundStyle(isHoveringSettings ? .blue : .secondary)
+                        .rotationEffect(.degrees(isHoveringSettings ? 30 : 0))
                 }
             }
             .buttonStyle(.plain)
             .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                     isHoveringSettings = hovering
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.05), radius: 1, y: 1)
+        )
     }
     
     // MARK: - 股票列表
@@ -160,84 +213,77 @@ struct StockListView: View {
             emptyView
         } else {
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: 2) {
                     ForEach(Array(stocks.enumerated()), id: \.element.id) { index, stock in
                         StockRowView(stock: stock, onOpenPriceAlert: {
                             onOpenPriceAlert(stock)
                         })
                         .transition(.asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .leading).combined(with: .opacity)
+                            insertion: .scale(scale: 0.95).combined(with: .opacity),
+                            removal: .scale(scale: 0.95).combined(with: .opacity)
                         ))
-                        
-                        if index < stocks.count - 1 {
-                            Divider()
-                                .padding(.leading, 14)
-                        }
                     }
                 }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
             }
             .scrollIndicators(.hidden)
         }
     }
     
     private var loadingView: some View {
-        VStack(spacing: 12) {
-            ProgressView()
-                .scaleEffect(0.8)
-            Text("加载中...")
-                .font(.system(size: 12))
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .stroke(Color.blue.opacity(0.2), lineWidth: 3)
+                    .frame(width: 40, height: 40)
+                
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .frame(width: 40, height: 40)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isLoading)
+            }
+            
+            Text("正在获取行情...")
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private func errorView(_ error: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 28))
-                .foregroundStyle(.orange)
-            Text("加载失败")
-                .font(.system(size: 13, weight: .medium))
-            Text(error)
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-            Button(action: refreshData) {
-                Text("重试")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.accentColor)
-                    )
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.1))
+                    .frame(width: 60, height: 60)
+                
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(.orange)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 4)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    
-    private var emptyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "chart.bar.xaxis")
-                .font(.system(size: 32))
-                .foregroundStyle(.quaternary)
-            Text("暂无自选股票")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-            Button(action: onOpenSettings) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus.circle.fill")
-                    Text("添加股票")
+            
+            VStack(spacing: 6) {
+                Text("加载失败")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            
+            Button(action: refreshData) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11))
+                    Text("重试")
                 }
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.vertical, 8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
@@ -246,56 +292,132 @@ struct StockListView: View {
             }
             .buttonStyle(.plain)
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var emptyView: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 80, height: 80)
+                
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 32))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            
+            VStack(spacing: 6) {
+                Text("暂无自选股票")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("添加您关注的股票，随时掌握行情动态")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            Button(action: onOpenSettings) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text("添加股票")
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue, .blue.opacity(0.8)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .shadow(color: .blue.opacity(0.3), radius: 8, y: 4)
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     // MARK: - 底部操作栏
     
     private var footerView: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             // 股票数量
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 8))
+                    .font(.system(size: 9))
                     .foregroundStyle(.yellow)
-                Text("\(stocks.count)")
-                    .font(.system(size: 10))
+                Text("\(stocks.count) 只自选")
+                    .font(.system(size: 10, weight: .medium))
             }
             .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule()
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
             
-            // 自动刷新状态
-            if appSettings.autoRefreshEnabled {
-                HStack(spacing: 3) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 8))
-                    Text("\(nextRefreshIn)s")
-                        .font(.system(size: 10, design: .monospaced))
+            Spacer()
+            
+            // 更新时间
+            if let time = stocks.first?.time, !time.isEmpty {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 5, height: 5)
+                    Text("更新于 \(formatTime(time))")
+                        .font(.system(size: 10))
                 }
                 .foregroundStyle(.tertiary)
             }
             
             Spacer()
             
-            // 更新时间
-            if let time = stocks.first?.time, !time.isEmpty {
-                Text(formatTime(time))
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-            
-            Spacer()
-            
             // 退出按钮
             Button(action: { NSApplication.shared.terminate(nil) }) {
-                Text("退出")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Image(systemName: "power")
+                        .font(.system(size: 9))
+                    Text("退出")
+                }
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.05), radius: 1, y: -1)
+        )
     }
     
     // MARK: - 方法
@@ -320,6 +442,7 @@ struct StockRowView: View {
     let onOpenPriceAlert: () -> Void
     
     @State private var isHovering = false
+    @State private var isPressed = false
     private var alertManager: PriceAlertManager { PriceAlertManager.shared }
     private var appSettings: AppSettings { AppSettings.shared }
     
@@ -333,12 +456,17 @@ struct StockRowView: View {
     }
     
     var body: some View {
-        HStack(spacing: 10) {
-            // 左侧：名称和代码
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
+        HStack(spacing: 12) {
+            // 左侧：涨跌指示条
+            RoundedRectangle(cornerRadius: 2)
+                .fill(priceColor.opacity(0.8))
+                .frame(width: 3, height: 36)
+            
+            // 中间：名称和代码
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
                     Text(stock.name)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 14, weight: .medium))
                         .lineLimit(1)
                     
                     // 菜单栏显示标记
@@ -346,68 +474,91 @@ struct StockRowView: View {
                         Image(systemName: "menubar.rectangle")
                             .font(.system(size: 9))
                             .foregroundStyle(.purple)
+                            .padding(3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.purple.opacity(0.1))
+                            )
                     }
                     
                     // 提醒图标
                     if alertCount > 0 || isHovering {
                         Button(action: onOpenPriceAlert) {
-                            ZStack(alignment: .topTrailing) {
+                            HStack(spacing: 2) {
                                 Image(systemName: alertCount > 0 ? "bell.fill" : "bell")
                                     .font(.system(size: 10))
-                                    .foregroundStyle(alertCount > 0 ? .orange : .secondary)
-                                
                                 if alertCount > 0 {
                                     Text("\(alertCount)")
-                                        .font(.system(size: 7, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .padding(2)
-                                        .background(Circle().fill(.orange))
-                                        .offset(x: 5, y: -3)
+                                        .font(.system(size: 9, weight: .semibold))
                                 }
                             }
+                            .foregroundStyle(alertCount > 0 ? .orange : .secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(alertCount > 0 ? Color.orange.opacity(0.15) : Color(nsColor: .controlBackgroundColor))
+                            )
                         }
                         .buttonStyle(.plain)
-                        .transition(.opacity.combined(with: .scale))
+                        .transition(.scale.combined(with: .opacity))
                     }
                 }
                 
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     marketBadge
                     Text(stock.code.uppercased())
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.tertiary)
                 }
             }
             
             Spacer()
             
             // 右侧：价格和涨跌
-            VStack(alignment: .trailing, spacing: 3) {
+            VStack(alignment: .trailing, spacing: 4) {
                 Text(String(format: "%.2f", stock.price))
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(priceColor)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
                 
                 // 涨跌幅标签
-                Text(stock.percentText)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(priceColor)
-                    )
+                HStack(spacing: 3) {
+                    Image(systemName: stock.isUp ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                        .font(.system(size: 8))
+                    Text(stock.percentText)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(
+                            LinearGradient(
+                                colors: stock.isUp ? 
+                                    [Color.red, Color.red.opacity(0.8)] : 
+                                    [Color.green, Color.green.opacity(0.8)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                )
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isHovering ? Color(nsColor: .controlBackgroundColor) : Color.clear)
+            RoundedRectangle(cornerRadius: 12)
+                .fill(isHovering ? 
+                      Color(nsColor: .controlBackgroundColor) : 
+                      Color(nsColor: .windowBackgroundColor).opacity(0.5))
+                .shadow(color: isHovering ? .black.opacity(0.05) : .clear, radius: 4, y: 2)
         )
+        .scaleEffect(isPressed ? 0.98 : 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
         .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.easeOut(duration: 0.2)) {
                 isHovering = hovering
             }
         }
@@ -439,13 +590,13 @@ struct StockRowView: View {
     
     private var marketBadge: some View {
         Text(stock.marketType.rawValue)
-            .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 4)
-            .padding(.vertical, 1)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(marketColor)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
             .background(
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(marketColor)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(marketColor.opacity(0.12))
             )
     }
     
@@ -460,12 +611,12 @@ struct StockRowView: View {
     
     private var marketColor: Color {
         switch stock.marketType {
-        case .aStock: return .red.opacity(0.8)
-        case .hkStock: return .orange.opacity(0.8)
-        case .usStock: return .blue.opacity(0.8)
-        case .cnFuture: return .purple.opacity(0.8)
-        case .overseaFuture: return .indigo.opacity(0.8)
-        case .unknown: return .gray.opacity(0.8)
+        case .aStock: return .red
+        case .hkStock: return .orange
+        case .usStock: return .blue
+        case .cnFuture: return .purple
+        case .overseaFuture: return .indigo
+        case .unknown: return .gray
         }
     }
 }
