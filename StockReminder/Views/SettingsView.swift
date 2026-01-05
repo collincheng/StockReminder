@@ -189,9 +189,9 @@ struct SettingsContainerView: View {
     
     private var tabPicker: some View {
         HStack(spacing: 0) {
-            tabButton(title: "自选", icon: "star.fill", index: 0)
-            tabButton(title: "搜索", icon: "magnifyingglass", index: 1)
-            tabButton(title: "刷新", icon: "arrow.clockwise", index: 2)
+            tabButton(title: "自选股", icon: "star.fill", index: 0)
+            tabButton(title: "添加", icon: "plus.circle", index: 1)
+            tabButton(title: "设置", icon: "gearshape", index: 2)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -619,131 +619,190 @@ struct SettingsContainerView: View {
     
     // MARK: - 菜单栏显示设置
     
+    private var backgroundService: BackgroundRefreshService { BackgroundRefreshService.shared }
+    
     private var menuBarDisplaySettings: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("菜单栏显示")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-            
-            // 开关
-            Toggle(isOn: $appSettings.showStockInMenuBar) {
-                HStack {
+        VStack(alignment: .leading, spacing: 14) {
+            // 标题和开关
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.purple.opacity(0.2), Color.purple.opacity(0.1)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                    
                     Image(systemName: "menubar.rectangle")
-                        .font(.system(size: 20))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.purple)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("在菜单栏显示股票")
-                            .font(.system(size: 13))
-                        Text("在图标旁显示实时行情")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                    }
                 }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("菜单栏显示")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("在图标旁显示实时行情")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                Toggle("", isOn: $appSettings.showStockInMenuBar)
+                    .toggleStyle(.switch)
+                    .scaleEffect(0.85)
             }
-            .toggleStyle(.switch)
             
             if appSettings.showStockInMenuBar {
-                Divider()
-                    .padding(.vertical, 4)
-                
                 // 显示内容选择
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("显示内容")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                     
-                    HStack(spacing: 8) {
-                        ForEach(MenuBarDisplayType.allCases, id: \.self) { type in
+                    HStack(spacing: 0) {
+                        ForEach(Array(MenuBarDisplayType.allCases.enumerated()), id: \.element) { index, type in
                             Button(action: {
-                                withAnimation(.easeInOut(duration: 0.15)) {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
                                     appSettings.menuBarDisplayType = type
                                 }
                             }) {
                                 Text(type.description)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.system(size: 12, weight: .medium))
                                     .foregroundStyle(appSettings.menuBarDisplayType == type ? .white : .primary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 6)
-                                            .fill(appSettings.menuBarDisplayType == type ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+                                        appSettings.menuBarDisplayType == type ?
+                                        AnyView(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color.purple)
+                                        ) :
+                                        AnyView(Color.clear)
                                     )
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                }
-                
-                // 当前显示的股票提示
-                if !appSettings.menuBarStockCode.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.purple)
-                        Text("当前显示：\(appSettings.menuBarStockCode.uppercased())")
-                            .font(.system(size: 11))
-                            .foregroundStyle(.secondary)
-                        Text("(在主列表长按切换)")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.top, 4)
-                } else {
-                    HStack(spacing: 6) {
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                        Text("在主列表长按股票可设为菜单栏显示")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(.top, 4)
-                }
-                
-                // 预览
-                HStack(spacing: 8) {
-                    Image(systemName: "eye")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                    Text("预览效果：")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                    
-                    HStack(spacing: 4) {
-                        Image("MenuBarIcon")
-                            .resizable()
-                            .frame(width: 16, height: 16)
-                        Text(menuBarPreviewText)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.green)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
                     .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(nsColor: .controlBackgroundColor))
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(nsColor: .windowBackgroundColor))
                     )
                 }
-                .padding(.top, 4)
+                
+                // 当前显示股票
+                HStack(spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.purple)
+                    
+                    if let stock = currentMenuBarStock {
+                        Text(stock.name)
+                            .font(.system(size: 12, weight: .medium))
+                        Text(stock.code.uppercased())
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                    } else if !appSettings.menuBarStockCode.isEmpty {
+                        Text(appSettings.menuBarStockCode.uppercased())
+                            .font(.system(size: 12, weight: .medium))
+                    } else {
+                        Text("显示第一只自选股")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Text("右键切换")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(nsColor: .windowBackgroundColor))
+                )
+                
+                // 实时预览
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("实时预览")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    
+                    menuBarPreview
+                }
             }
         }
-        .padding(16)
+        .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 14)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
-        .animation(.easeInOut(duration: 0.2), value: appSettings.showStockInMenuBar)
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: appSettings.showStockInMenuBar)
     }
     
-    /// 菜单栏预览文本
-    private var menuBarPreviewText: String {
+    /// 当前菜单栏显示的股票
+    private var currentMenuBarStock: StockData? {
+        let stocks = backgroundService.stocks
+        if !appSettings.menuBarStockCode.isEmpty {
+            return stocks.first { $0.code.lowercased() == appSettings.menuBarStockCode.lowercased() }
+        }
+        return stocks.first
+    }
+    
+    /// 菜单栏预览
+    private var menuBarPreview: some View {
+        HStack(spacing: 6) {
+            // 模拟菜单栏背景
+            HStack(spacing: 4) {
+                Image("MenuBarIcon")
+                    .resizable()
+                    .renderingMode(.template)
+                    .frame(width: 16, height: 16)
+                    .foregroundStyle(.primary)
+                
+                if let stock = currentMenuBarStock {
+                    Text(stock.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                    
+                    Text(menuBarPreviewPriceText(for: stock))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(stock.updown > 0 ? .red : (stock.updown < 0 ? .green : .secondary))
+                } else {
+                    Text("招商银行")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                    
+                    Text("+2.35%")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.red)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(nsColor: .windowBackgroundColor))
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+            )
+            
+            Spacer()
+        }
+    }
+    
+    /// 预览价格文本
+    private func menuBarPreviewPriceText(for stock: StockData) -> String {
         switch appSettings.menuBarDisplayType {
         case .percent:
-            return "+2.35%"
+            return stock.percentText
         case .price:
-            return "39.22"
+            return String(format: "%.2f", stock.price)
         case .priceAndPercent:
-            return "39.22 +2.35%"
+            return String(format: "%.2f %@", stock.price, stock.percentText)
         }
     }
     
