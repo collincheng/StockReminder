@@ -11,16 +11,25 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var currentPage: AppPage = .stockList
+    @State private var selectedStockForAlert: StockData?
     
     var body: some View {
         ZStack {
             switch currentPage {
             case .stockList:
-                StockListView(onOpenSettings: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        currentPage = .settings
+                StockListView(
+                    onOpenSettings: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            currentPage = .settings
+                        }
+                    },
+                    onOpenPriceAlert: { stock in
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            selectedStockForAlert = stock
+                            currentPage = .priceAlert
+                        }
                     }
-                })
+                )
                 .transition(.move(edge: .leading))
                 
             case .settings:
@@ -30,6 +39,17 @@ struct ContentView: View {
                     }
                 })
                 .transition(.move(edge: .trailing))
+                
+            case .priceAlert:
+                if let stock = selectedStockForAlert {
+                    PriceAlertView(stock: stock) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            currentPage = .stockList
+                            selectedStockForAlert = nil
+                        }
+                    }
+                    .transition(.move(edge: .trailing))
+                }
             }
         }
         .frame(width: 340, height: 450)
@@ -40,15 +60,18 @@ struct ContentView: View {
 enum AppPage {
     case stockList
     case settings
+    case priceAlert
 }
 
 // MARK: - 股票列表视图
 
 struct StockListView: View {
     let onOpenSettings: () -> Void
+    let onOpenPriceAlert: (StockData) -> Void
     
     @State private var stockStore = StockStore.shared
     @State private var appSettings = AppSettings.shared
+    @State private var alertManager = PriceAlertManager.shared
     @State private var stocks: [StockData] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
@@ -196,11 +219,13 @@ struct StockListView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(stocks.enumerated()), id: \.element.id) { index, stock in
-                        StockRowView(stock: stock)
-                            .transition(.asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ))
+                        StockRowView(stock: stock, onOpenPriceAlert: {
+                            onOpenPriceAlert(stock)
+                        })
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
                         
                         if index < stocks.count - 1 {
                             Divider()
@@ -359,6 +384,9 @@ struct StockListView: View {
                     stocks = data
                 }
                 isLoading = false
+                
+                // 检查价格提醒
+                alertManager.checkPrices(stocks: data)
             }
         } catch {
             await MainActor.run {
@@ -381,15 +409,46 @@ struct StockListView: View {
 
 struct StockRowView: View {
     let stock: StockData
+    let onOpenPriceAlert: () -> Void
+    
     @State private var isHovering = false
+    @State private var alertManager = PriceAlertManager.shared
+    
+    private var alertCount: Int {
+        alertManager.activeAlertCount(forStock: stock.code)
+    }
     
     var body: some View {
         HStack(spacing: 10) {
             // 左侧：名称和代码
             VStack(alignment: .leading, spacing: 3) {
-                Text(stock.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(stock.name)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                    
+                    // 提醒图标
+                    if alertCount > 0 || isHovering {
+                        Button(action: onOpenPriceAlert) {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: alertCount > 0 ? "bell.fill" : "bell")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(alertCount > 0 ? .orange : .secondary)
+                                
+                                if alertCount > 0 {
+                                    Text("\(alertCount)")
+                                        .font(.system(size: 7, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(2)
+                                        .background(Circle().fill(.orange))
+                                        .offset(x: 5, y: -3)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.opacity.combined(with: .scale))
+                    }
+                }
                 
                 HStack(spacing: 4) {
                     marketBadge
