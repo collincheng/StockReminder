@@ -10,8 +10,9 @@ import SwiftUI
 @main
 struct StockReminderApp: App {
     var body: some Scene {
-        WindowGroup {
+        MenuBarExtra("Stock Reminder", image: "MenuBarIcon") {
             ContentView()
         }
+        .menuBarExtraStyle(.window)
     }
 }
