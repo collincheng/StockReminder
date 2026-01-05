@@ -588,9 +588,66 @@ struct SettingsContainerView: View {
                 
                 // 菜单栏显示设置
                 menuBarDisplaySettings
+                
+                // 关于
+                aboutSection
             }
             .padding(16)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: appSettings.autoRefreshEnabled)
+        }
+    }
+    
+    /// 关于信息
+    private var aboutSection: some View {
+        VStack(spacing: 12) {
+            Divider()
+                .padding(.vertical, 8)
+            
+            HStack(spacing: 16) {
+                // App 图标
+                if let appIcon = NSImage(named: "AppIcon") {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                } else {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(
+                            LinearGradient(
+                                colors: [.blue, .purple],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                        .overlay(
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.white)
+                        )
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("股票提醒")
+                        .font(.system(size: 14, weight: .semibold))
+                    
+                    Text("版本 \(AppInfo.version) (\(AppInfo.build))")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                
+                Spacer()
+                
+                // 版权信息
+                Text("© 2026")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
         }
     }
     
