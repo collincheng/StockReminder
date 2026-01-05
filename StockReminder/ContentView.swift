@@ -384,12 +384,12 @@ struct StockListView: View {
                 Spacer()
                 
                 // 更新时间
-                if let time = stocks.first?.time, !time.isEmpty {
+                if let time = lastRefreshTime {
                     HStack(spacing: 4) {
                         Circle()
                             .fill(.green)
                             .frame(width: 5, height: 5)
-                        Text("更新于 \(formatTime(time))")
+                        Text("更新于 \(formatRefreshTime(time))")
                             .font(.system(size: 10))
                     }
                     .foregroundStyle(.tertiary)
@@ -479,6 +479,12 @@ struct StockListView: View {
             return time.components(separatedBy: " ").last ?? time
         }
         return time
+    }
+    
+    private func formatRefreshTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter.string(from: date)
     }
 }
 
