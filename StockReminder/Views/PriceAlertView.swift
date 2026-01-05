@@ -574,7 +574,9 @@ struct PriceAlertView: View {
         let color: Color = isUp ? .red : .green
         
         return Button(action: {
-            let newPrice = stock.price * (1 + Double(percent) / 100)
+            // 基于昨收价计算目标价格
+            let basePrice = stock.yestclose > 0 ? stock.yestclose : stock.price
+            let newPrice = basePrice * (1 + Double(percent) / 100)
             targetPriceText = String(format: "%.2f", newPrice)
             selectedAlertType = isUp ? .above : .below
         }) {
