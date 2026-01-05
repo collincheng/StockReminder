@@ -211,13 +211,14 @@ struct SettingsContainerView: View {
             }
             .foregroundStyle(selectedTab == index ? .white : .secondary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(selectedTab == index ? Color.accentColor : Color.clear)
             )
+            .contentShape(Rectangle()) // 扩展点击区域
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless) // 使用 borderless 替代 plain，响应更好
     }
     
     // MARK: - 我的自选列表
