@@ -69,16 +69,17 @@ struct StockListView: View {
     let onOpenSettings: () -> Void
     let onOpenPriceAlert: (StockData) -> Void
     
-    @State private var stockStore = StockStore.shared
+    // 使用后台刷新服务
+    @State private var backgroundService = BackgroundRefreshService.shared
     @State private var appSettings = AppSettings.shared
-    @State private var alertManager = PriceAlertManager.shared
-    @State private var stocks: [StockData] = []
-    @State private var isLoading = false
-    @State private var errorMessage: String?
     @State private var isHoveringSettings = false
-    @State private var refreshTimer: Timer?
-    @State private var lastRefreshTime: Date?
-    @State private var nextRefreshIn: Int = 0
+    
+    // 从后台服务获取数据
+    private var stocks: [StockData] { backgroundService.stocks }
+    private var isLoading: Bool { backgroundService.isLoading }
+    private var errorMessage: String? { backgroundService.errorMessage }
+    private var lastRefreshTime: Date? { backgroundService.lastRefreshTime }
+    private var nextRefreshIn: Int { backgroundService.nextRefreshIn }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -95,64 +96,6 @@ struct StockListView: View {
             // 底部操作栏
             footerView
         }
-        .task {
-            await loadStockData()
-            startAutoRefresh()
-        }
-        .onChange(of: stockStore.stockCodes) { _, _ in
-            Task {
-                await loadStockData()
-            }
-        }
-        .onChange(of: appSettings.refreshInterval) { _, _ in
-            restartAutoRefresh()
-        }
-        .onChange(of: appSettings.autoRefreshEnabled) { _, _ in
-            if appSettings.autoRefreshEnabled {
-                startAutoRefresh()
-            } else {
-                stopAutoRefresh()
-            }
-        }
-        .onDisappear {
-            stopAutoRefresh()
-        }
-    }
-    
-    // MARK: - 自动刷新
-    
-    private func startAutoRefresh() {
-        guard appSettings.autoRefreshEnabled else { return }
-        stopAutoRefresh()
-        
-        let interval = appSettings.refreshInterval
-        nextRefreshIn = Int(interval)
-        
-        // 创建定时器
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            nextRefreshIn -= 1
-            
-            if nextRefreshIn <= 0 {
-                nextRefreshIn = Int(appSettings.refreshInterval)
-                
-                // 检查是否应该刷新
-                if appSettings.shouldRefresh {
-                    Task {
-                        await loadStockData()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func stopAutoRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
-    }
-    
-    private func restartAutoRefresh() {
-        stopAutoRefresh()
-        startAutoRefresh()
     }
     
     // MARK: - 顶部标题栏
@@ -358,42 +301,7 @@ struct StockListView: View {
     // MARK: - 方法
     
     private func refreshData() {
-        Task {
-            await loadStockData()
-        }
-    }
-    
-    private func loadStockData() async {
-        guard !stockStore.stockCodes.isEmpty else {
-            await MainActor.run {
-                stocks = []
-                isLoading = false
-            }
-            return
-        }
-        
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
-        }
-        
-        do {
-            let data = try await StockService.shared.getStockData(codes: stockStore.stockCodes)
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    stocks = data
-                }
-                isLoading = false
-                
-                // 检查价格提醒
-                alertManager.checkPrices(stocks: data)
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                isLoading = false
-            }
-        }
+        backgroundService.refresh()
     }
     
     private func formatTime(_ time: String) -> String {

@@ -39,6 +39,8 @@ class StockStore {
     
     private func saveToUserDefaults() {
         UserDefaults.standard.set(stockCodes, forKey: userDefaultsKey)
+        // 通知后台服务
+        NotificationCenter.default.post(name: .stockCodesDidChange, object: nil)
     }
     
     /// 添加股票

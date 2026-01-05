@@ -1,0 +1,179 @@
+//
+//  BackgroundRefreshService.swift
+//  StockReminder
+//
+//  Created by Colin on 2026/1/5.
+//
+
+import Foundation
+import Combine
+
+/// 后台刷新服务 - 独立于视图生命周期运行
+@Observable
+class BackgroundRefreshService {
+    static let shared = BackgroundRefreshService()
+    
+    /// 最新的股票数据
+    var stocks: [StockData] = []
+    
+    /// 是否正在加载
+    var isLoading = false
+    
+    /// 错误信息
+    var errorMessage: String?
+    
+    /// 上次刷新时间
+    var lastRefreshTime: Date?
+    
+    /// 下次刷新倒计时
+    var nextRefreshIn: Int = 0
+    
+    private var refreshTimer: Timer?
+    private let stockStore = StockStore.shared
+    private let appSettings = AppSettings.shared
+    private let alertManager = PriceAlertManager.shared
+    
+    private init() {
+        // 启动时立即加载数据
+        Task {
+            await loadStockData()
+        }
+        
+        // 启动后台定时刷新
+        startBackgroundRefresh()
+        
+        // 监听设置变化
+        setupObservers()
+    }
+    
+    // MARK: - 设置观察者
+    
+    private func setupObservers() {
+        // 监听股票列表变化
+        NotificationCenter.default.addObserver(
+            forName: .stockCodesDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task {
+                await self?.loadStockData()
+            }
+        }
+        
+        // 监听刷新间隔变化
+        NotificationCenter.default.addObserver(
+            forName: .refreshIntervalDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.restartBackgroundRefresh()
+        }
+        
+        // 监听自动刷新开关变化
+        NotificationCenter.default.addObserver(
+            forName: .autoRefreshDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            if self.appSettings.autoRefreshEnabled {
+                self.startBackgroundRefresh()
+            } else {
+                self.stopBackgroundRefresh()
+            }
+        }
+    }
+    
+    // MARK: - 后台刷新
+    
+    func startBackgroundRefresh() {
+        guard appSettings.autoRefreshEnabled else { return }
+        stopBackgroundRefresh()
+        
+        let interval = appSettings.refreshInterval
+        nextRefreshIn = Int(interval)
+        
+        // 创建定时器 - 在主线程的 common 模式下运行，即使 UI 在交互也不会暂停
+        refreshTimer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            self.nextRefreshIn -= 1
+            
+            if self.nextRefreshIn <= 0 {
+                self.nextRefreshIn = Int(self.appSettings.refreshInterval)
+                
+                // 检查是否应该刷新（交易时间等）
+                if self.appSettings.shouldRefresh {
+                    Task {
+                        await self.loadStockData()
+                    }
+                }
+            }
+        }
+        
+        // 添加到 RunLoop 的 common 模式
+        if let timer = refreshTimer {
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+    
+    func stopBackgroundRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+    
+    func restartBackgroundRefresh() {
+        stopBackgroundRefresh()
+        startBackgroundRefresh()
+    }
+    
+    // MARK: - 数据加载
+    
+    func loadStockData() async {
+        guard !stockStore.stockCodes.isEmpty else {
+            await MainActor.run {
+                stocks = []
+                isLoading = false
+            }
+            return
+        }
+        
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+        
+        do {
+            let data = try await StockService.shared.getStockData(codes: stockStore.stockCodes)
+            await MainActor.run {
+                stocks = data
+                isLoading = false
+                lastRefreshTime = Date()
+                
+                // 检查价格提醒
+                alertManager.checkPrices(stocks: data)
+            }
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                isLoading = false
+            }
+        }
+    }
+    
+    /// 手动刷新
+    func refresh() {
+        Task {
+            await loadStockData()
+        }
+    }
+}
+
+// MARK: - 通知名称
+
+extension Notification.Name {
+    static let stockCodesDidChange = Notification.Name("stockCodesDidChange")
+    static let refreshIntervalDidChange = Notification.Name("refreshIntervalDidChange")
+    static let autoRefreshDidChange = Notification.Name("autoRefreshDidChange")
+}
+

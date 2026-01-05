@@ -32,6 +32,8 @@ class AppSettings {
                 refreshInterval = Self.minRefreshInterval
             }
             saveToUserDefaults()
+            // 通知后台服务
+            NotificationCenter.default.post(name: .refreshIntervalDidChange, object: nil)
         }
     }
     
@@ -39,6 +41,8 @@ class AppSettings {
     var autoRefreshEnabled: Bool {
         didSet {
             saveToUserDefaults()
+            // 通知后台服务
+            NotificationCenter.default.post(name: .autoRefreshDidChange, object: nil)
         }
     }
     
