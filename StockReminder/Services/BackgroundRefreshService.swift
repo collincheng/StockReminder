@@ -28,12 +28,19 @@ class BackgroundRefreshService {
     /// 下次刷新倒计时
     var nextRefreshIn: Int = 0
     
+    /// 各市场交易状态
+    var marketStatus: [MarketType: Bool] = [:]
+    
     private var refreshTimer: Timer?
     private let stockStore = StockStore.shared
     private let appSettings = AppSettings.shared
     private let alertManager = PriceAlertManager.shared
+    private let tradingHours = MarketTradingHours.shared
     
     private init() {
+        // 初始化市场状态
+        updateMarketStatus()
+        
         // 启动时立即加载数据
         Task {
             await loadStockData()
@@ -44,6 +51,40 @@ class BackgroundRefreshService {
         
         // 监听设置变化
         setupObservers()
+    }
+    
+    // MARK: - 市场状态更新
+    
+    /// 更新各市场交易状态
+    func updateMarketStatus() {
+        for market in MarketType.allCases {
+            marketStatus[market] = tradingHours.isTradingTime(for: market)
+        }
+    }
+    
+    /// 获取用户持有的各市场股票数量
+    func stockCountByMarket() -> [MarketType: Int] {
+        var counts: [MarketType: Int] = [:]
+        for stock in stocks {
+            counts[stock.marketType, default: 0] += 1
+        }
+        return counts
+    }
+    
+    /// 获取当前交易中的市场（只返回用户有股票的市场）
+    var activeTradingMarkets: [MarketType] {
+        let counts = stockCountByMarket()
+        return MarketType.allCases.filter { market in
+            (counts[market] ?? 0) > 0 && (marketStatus[market] ?? false)
+        }
+    }
+    
+    /// 获取当前休市的市场（只返回用户有股票的市场）
+    var inactiveMarkets: [MarketType] {
+        let counts = stockCountByMarket()
+        return MarketType.allCases.filter { market in
+            (counts[market] ?? 0) > 0 && !(marketStatus[market] ?? false)
+        }
     }
     
     // MARK: - 设置观察者
@@ -98,6 +139,11 @@ class BackgroundRefreshService {
             guard let self = self else { return }
             
             self.nextRefreshIn -= 1
+            
+            // 每分钟更新一次市场状态
+            if Int(Date().timeIntervalSince1970) % 60 == 0 {
+                self.updateMarketStatus()
+            }
             
             if self.nextRefreshIn <= 0 {
                 self.nextRefreshIn = Int(self.appSettings.refreshInterval)

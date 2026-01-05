@@ -234,6 +234,9 @@ class PriceAlertManager {
     
     // MARK: - 检查价格并触发提醒
     
+    private var tradingHours: MarketTradingHours { MarketTradingHours.shared }
+    private var appSettings: AppSettings { AppSettings.shared }
+    
     /// 检查所有股票价格并触发提醒
     func checkPrices(stocks: [StockData]) {
         for stock in stocks {
@@ -243,6 +246,13 @@ class PriceAlertManager {
     
     /// 检查单个股票价格
     func checkPrice(stock: StockData) {
+        // 如果开启了"仅交易时间提醒"，则检查该股票是否在交易时间
+        if appSettings.onlyRefreshDuringTradingHours {
+            guard tradingHours.isTradingTime(for: stock.marketType) else {
+                return // 非交易时间不检查提醒
+            }
+        }
+        
         let stockAlerts = getAlerts(forStock: stock.code)
         
         for alert in stockAlerts {

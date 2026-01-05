@@ -360,47 +360,19 @@ struct StockListView: View {
     // MARK: - 底部操作栏
     
     private var footerView: some View {
-        HStack(spacing: 10) {
-            // 股票数量
-            HStack(spacing: 4) {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.yellow)
-                Text("\(stocks.count) 只自选")
-                    .font(.system(size: 10, weight: .medium))
-            }
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
+        VStack(spacing: 6) {
+            // 市场交易状态
+            marketStatusBar
             
-            Spacer()
-            
-            // 更新时间
-            if let time = stocks.first?.time, !time.isEmpty {
+            HStack(spacing: 10) {
+                // 股票数量
                 HStack(spacing: 4) {
-                    Circle()
-                        .fill(.green)
-                        .frame(width: 5, height: 5)
-                    Text("更新于 \(formatTime(time))")
-                        .font(.system(size: 10))
-                }
-                .foregroundStyle(.tertiary)
-            }
-            
-            Spacer()
-            
-            // 退出按钮
-            Button(action: { NSApplication.shared.terminate(nil) }) {
-                HStack(spacing: 4) {
-                    Image(systemName: "power")
+                    Image(systemName: "star.fill")
                         .font(.system(size: 9))
-                    Text("退出")
+                        .foregroundStyle(.yellow)
+                    Text("\(stocks.count) 只自选")
+                        .font(.system(size: 10, weight: .medium))
                 }
-                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -408,8 +380,41 @@ struct StockListView: View {
                     Capsule()
                         .fill(Color(nsColor: .controlBackgroundColor))
                 )
+                
+                Spacer()
+                
+                // 更新时间
+                if let time = stocks.first?.time, !time.isEmpty {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(.green)
+                            .frame(width: 5, height: 5)
+                        Text("更新于 \(formatTime(time))")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(.tertiary)
+                }
+                
+                Spacer()
+                
+                // 退出按钮
+                Button(action: { NSApplication.shared.terminate(nil) }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "power")
+                            .font(.system(size: 9))
+                        Text("退出")
+                    }
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -418,6 +423,48 @@ struct StockListView: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.05), radius: 1, y: -1)
         )
+    }
+    
+    /// 市场状态栏
+    private var marketStatusBar: some View {
+        let tradingHours = MarketTradingHours.shared
+        let activeMarkets = backgroundService.activeTradingMarkets
+        let inactiveMarkets = backgroundService.inactiveMarkets
+        
+        return HStack(spacing: 8) {
+            // 交易中的市场
+            if !activeMarkets.isEmpty {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.green)
+                        .frame(width: 5, height: 5)
+                    Text(activeMarkets.map { $0.rawValue }.joined(separator: "·"))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.green)
+                }
+            }
+            
+            // 休市的市场
+            if !inactiveMarkets.isEmpty {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(.gray.opacity(0.5))
+                        .frame(width: 5, height: 5)
+                    Text(inactiveMarkets.map { $0.rawValue }.joined(separator: "·"))
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            // 如果全部休市
+            if activeMarkets.isEmpty && !inactiveMarkets.isEmpty {
+                Text("全部休市")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+        }
     }
     
     // MARK: - 方法

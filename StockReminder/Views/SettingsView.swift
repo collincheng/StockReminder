@@ -15,6 +15,7 @@ struct SettingsContainerView: View {
     // 使用 @Bindable 来支持绑定
     @Bindable private var stockStore = StockStore.shared
     @Bindable private var appSettings = AppSettings.shared
+    private var tradingHours: MarketTradingHours { MarketTradingHours.shared }
     
     @State private var searchText = ""
     @State private var searchResults: [StockSearchResult] = []
@@ -219,6 +220,44 @@ struct SettingsContainerView: View {
             .contentShape(Rectangle()) // 扩展点击区域
         }
         .buttonStyle(.borderless) // 使用 borderless 替代 plain，响应更好
+    }
+    
+    /// 市场状态行
+    private func marketStatusRow(_ market: MarketType, hours: String) -> some View {
+        let isTrading = tradingHours.isTradingTime(for: market)
+        
+        return HStack(spacing: 6) {
+            Circle()
+                .fill(isTrading ? Color.green : Color.gray.opacity(0.5))
+                .frame(width: 6, height: 6)
+            
+            VStack(alignment: .leading, spacing: 1) {
+                Text(market.rawValue)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isTrading ? .primary : .secondary)
+                Text(hours)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+            
+            Spacer()
+            
+            Text(isTrading ? "交易中" : "休市")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(isTrading ? .green : .secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill(isTrading ? Color.green.opacity(0.15) : Color.gray.opacity(0.1))
+                )
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        )
     }
     
     // MARK: - 我的自选列表
@@ -543,23 +582,20 @@ struct SettingsContainerView: View {
                         }
                         .toggleStyle(.switch)
                         
-                        // 交易时间说明
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(appSettings.isAStockTradingTime ? .green : .gray)
-                                    .frame(width: 6, height: 6)
-                                Text("A股：9:30-11:30, 13:00-15:00")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
-                            }
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(appSettings.isUSStockTradingTime ? .green : .gray)
-                                    .frame(width: 6, height: 6)
-                                Text("美股：21:30-04:00 (北京时间)")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
+                        // 各市场交易时间状态
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("市场交易状态")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
+                            
+                            LazyVGrid(columns: [
+                                GridItem(.flexible()),
+                                GridItem(.flexible())
+                            ], spacing: 8) {
+                                marketStatusRow(.aStock, hours: "9:30-11:30, 13:00-15:00")
+                                marketStatusRow(.hkStock, hours: "9:30-12:00, 13:00-16:00")
+                                marketStatusRow(.usStock, hours: tradingHours.isUSDaylightSavingTime ? "21:30-04:00" : "22:30-05:00")
+                                marketStatusRow(.cnFuture, hours: "日盘+夜盘")
                             }
                         }
                         .padding(.top, 4)
