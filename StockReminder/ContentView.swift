@@ -321,9 +321,15 @@ struct StockRowView: View {
     
     @State private var isHovering = false
     private var alertManager: PriceAlertManager { PriceAlertManager.shared }
+    private var appSettings: AppSettings { AppSettings.shared }
     
     private var alertCount: Int {
         alertManager.activeAlertCount(forStock: stock.code)
+    }
+    
+    /// 是否是菜单栏显示的股票
+    private var isMenuBarStock: Bool {
+        appSettings.menuBarStockCode.lowercased() == stock.code.lowercased()
     }
     
     var body: some View {
@@ -334,6 +340,13 @@ struct StockRowView: View {
                     Text(stock.name)
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
+                    
+                    // 菜单栏显示标记
+                    if isMenuBarStock && appSettings.showStockInMenuBar {
+                        Image(systemName: "menubar.rectangle")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.purple)
+                    }
                     
                     // 提醒图标
                     if alertCount > 0 || isHovering {
@@ -396,6 +409,30 @@ struct StockRowView: View {
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering
+            }
+        }
+        .contextMenu {
+            // 右键菜单
+            Button(action: onOpenPriceAlert) {
+                Label("价格提醒", systemImage: "bell")
+            }
+            
+            Divider()
+            
+            if appSettings.showStockInMenuBar {
+                if isMenuBarStock {
+                    Button(action: {
+                        appSettings.menuBarStockCode = ""
+                    }) {
+                        Label("取消菜单栏显示", systemImage: "menubar.rectangle")
+                    }
+                } else {
+                    Button(action: {
+                        appSettings.menuBarStockCode = stock.code
+                    }) {
+                        Label("在菜单栏显示", systemImage: "menubar.rectangle")
+                    }
+                }
             }
         }
     }

@@ -197,5 +197,6 @@ extension Notification.Name {
     static let stockCodesDidChange = Notification.Name("stockCodesDidChange")
     static let refreshIntervalDidChange = Notification.Name("refreshIntervalDidChange")
     static let autoRefreshDidChange = Notification.Name("autoRefreshDidChange")
+    static let menuBarDisplayDidChange = Notification.Name("menuBarDisplayDidChange")
 }
 

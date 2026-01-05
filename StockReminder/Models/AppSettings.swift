@@ -8,6 +8,22 @@
 import Foundation
 import SwiftUI
 
+// MARK: - 菜单栏显示类型
+
+enum MenuBarDisplayType: String, CaseIterable, Codable {
+    case percent = "percent"        // 显示涨跌幅
+    case price = "price"            // 显示当前价格
+    case priceAndPercent = "both"   // 显示价格和涨跌幅
+    
+    var description: String {
+        switch self {
+        case .percent: return "涨跌幅"
+        case .price: return "当前价格"
+        case .priceAndPercent: return "价格+涨跌幅"
+        }
+    }
+}
+
 /// 应用设置
 @Observable
 class AppSettings {
@@ -53,11 +69,40 @@ class AppSettings {
         }
     }
     
+    // MARK: - 菜单栏显示设置
+    
+    /// 是否在菜单栏显示股票涨幅
+    var showStockInMenuBar: Bool {
+        didSet {
+            saveToUserDefaults()
+            NotificationCenter.default.post(name: .menuBarDisplayDidChange, object: nil)
+        }
+    }
+    
+    /// 菜单栏显示的股票代码（空表示显示第一只）
+    var menuBarStockCode: String {
+        didSet {
+            saveToUserDefaults()
+            NotificationCenter.default.post(name: .menuBarDisplayDidChange, object: nil)
+        }
+    }
+    
+    /// 菜单栏显示内容类型
+    var menuBarDisplayType: MenuBarDisplayType {
+        didSet {
+            saveToUserDefaults()
+            NotificationCenter.default.post(name: .menuBarDisplayDidChange, object: nil)
+        }
+    }
+    
     // MARK: - UserDefaults Keys
     
     private let refreshIntervalKey = "refreshInterval"
     private let autoRefreshEnabledKey = "autoRefreshEnabled"
     private let onlyRefreshDuringTradingHoursKey = "onlyRefreshDuringTradingHours"
+    private let showStockInMenuBarKey = "showStockInMenuBar"
+    private let menuBarStockCodeKey = "menuBarStockCode"
+    private let menuBarDisplayTypeKey = "menuBarDisplayType"
     
     // MARK: - 初始化
     
@@ -81,6 +126,22 @@ class AppSettings {
         } else {
             self.onlyRefreshDuringTradingHours = true
         }
+        
+        // 菜单栏显示设置
+        if defaults.object(forKey: showStockInMenuBarKey) != nil {
+            self.showStockInMenuBar = defaults.bool(forKey: showStockInMenuBarKey)
+        } else {
+            self.showStockInMenuBar = false // 默认关闭
+        }
+        
+        self.menuBarStockCode = defaults.string(forKey: menuBarStockCodeKey) ?? ""
+        
+        if let typeRaw = defaults.string(forKey: menuBarDisplayTypeKey),
+           let type = MenuBarDisplayType(rawValue: typeRaw) {
+            self.menuBarDisplayType = type
+        } else {
+            self.menuBarDisplayType = .percent
+        }
     }
     
     private func saveToUserDefaults() {
@@ -88,6 +149,9 @@ class AppSettings {
         defaults.set(refreshInterval, forKey: refreshIntervalKey)
         defaults.set(autoRefreshEnabled, forKey: autoRefreshEnabledKey)
         defaults.set(onlyRefreshDuringTradingHours, forKey: onlyRefreshDuringTradingHoursKey)
+        defaults.set(showStockInMenuBar, forKey: showStockInMenuBarKey)
+        defaults.set(menuBarStockCode, forKey: menuBarStockCodeKey)
+        defaults.set(menuBarDisplayType.rawValue, forKey: menuBarDisplayTypeKey)
     }
     
     // MARK: - 交易时间判断
