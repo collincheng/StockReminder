@@ -35,10 +35,10 @@ class AppSettings {
     static let minRefreshInterval: TimeInterval = 3
     
     /// 默认刷新间隔（秒）
-    static let defaultRefreshInterval: TimeInterval = 30
+    static let defaultRefreshInterval: TimeInterval = 3
     
     /// 可选的刷新间隔选项（秒）
-    static let refreshIntervalOptions: [TimeInterval] = [5, 10, 15, 30, 60, 120, 300]
+    static let refreshIntervalOptions: [TimeInterval] = [3, 5, 10, 15, 30, 60, 120]
     
     /// 用户设置的刷新间隔（秒）
     var refreshInterval: TimeInterval {

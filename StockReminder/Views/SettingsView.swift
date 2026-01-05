@@ -482,138 +482,139 @@ struct SettingsContainerView: View {
     
     private var refreshSettingsView: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // 自动刷新开关
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("自动刷新")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                    
-                    Toggle(isOn: $appSettings.autoRefreshEnabled) {
-                        HStack {
-                            Image(systemName: "arrow.clockwise.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.blue)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("启用自动刷新")
-                                    .font(.system(size: 13))
-                                Text("定时自动获取最新行情")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+            VStack(spacing: 16) {
+                // 自动刷新开关 - 顶部卡片
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.blue.opacity(0.2), Color.blue.opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                        
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.blue)
                     }
-                    .toggleStyle(.switch)
+                    
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("自动刷新")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("定时获取最新行情数据")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Toggle("", isOn: $appSettings.autoRefreshEnabled)
+                        .toggleStyle(.switch)
+                        .scaleEffect(0.85)
                 }
-                .padding(16)
+                .padding(14)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 14)
                         .fill(Color(nsColor: .controlBackgroundColor))
                 )
                 
                 // 刷新间隔设置
                 if appSettings.autoRefreshEnabled {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("刷新间隔")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 10) {
-                            ForEach(AppSettings.refreshIntervalOptions, id: \.self) { interval in
-                                Button(action: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        appSettings.refreshInterval = interval
-                                    }
-                                }) {
-                                    Text(appSettings.intervalDescription(interval))
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(appSettings.refreshInterval == interval ? .white : .primary)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .fill(appSettings.refreshInterval == interval ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
-                                        )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(appSettings.refreshInterval == interval ? Color.clear : Color.gray.opacity(0.2), lineWidth: 1)
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Image(systemName: "timer")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.orange)
+                            Text("刷新间隔")
+                                .font(.system(size: 13, weight: .semibold))
                         }
                         
-                        Text("最小间隔 \(Int(AppSettings.minRefreshInterval)) 秒，防止请求过于频繁")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                        // 间隔选项 - 4列布局
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                            ForEach(AppSettings.refreshIntervalOptions, id: \.self) { interval in
+                                refreshIntervalButton(interval)
+                            }
+                        }
                     }
-                    .padding(16)
+                    .padding(14)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 14)
                             .fill(Color(nsColor: .controlBackgroundColor))
                     )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
                 
-                // 交易时间刷新
+                // 市场交易状态
                 if appSettings.autoRefreshEnabled {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("智能刷新")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.primary)
-                        
-                        Toggle(isOn: $appSettings.onlyRefreshDuringTradingHours) {
-                            HStack {
-                                Image(systemName: "clock.badge.checkmark.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(.green)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("仅在交易时间刷新")
-                                        .font(.system(size: 13))
-                                    Text("非交易时间暂停自动刷新，节省资源")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .toggleStyle(.switch)
-                        
-                        // 各市场交易时间状态
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("市场交易状态")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Image(systemName: "clock.badge.checkmark")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.green)
+                            Text("市场状态")
+                                .font(.system(size: 13, weight: .semibold))
                             
-                            LazyVGrid(columns: [
-                                GridItem(.flexible()),
-                                GridItem(.flexible())
-                            ], spacing: 8) {
-                                marketStatusRow(.aStock, hours: "9:30-11:30, 13:00-15:00")
-                                marketStatusRow(.hkStock, hours: "9:30-12:00, 13:00-16:00")
-                                marketStatusRow(.usStock, hours: tradingHours.isUSDaylightSavingTime ? "21:30-04:00" : "22:30-05:00")
-                                marketStatusRow(.cnFuture, hours: "日盘+夜盘")
-                            }
+                            Spacer()
+                            
+                            Text("仅交易时间刷新")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.green.opacity(0.1))
+                                )
                         }
-                        .padding(.top, 4)
+                        
+                        // 市场状态网格
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                            marketStatusRow(.aStock, hours: "9:30-11:30, 13:00-15:00")
+                            marketStatusRow(.hkStock, hours: "9:30-12:00, 13:00-16:00")
+                            marketStatusRow(.usStock, hours: tradingHours.isUSDaylightSavingTime ? "21:30-04:00" : "22:30-05:00")
+                            marketStatusRow(.cnFuture, hours: "日盘+夜盘")
+                        }
                     }
-                    .padding(16)
+                    .padding(14)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 14)
                             .fill(Color(nsColor: .controlBackgroundColor))
                     )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
                 
                 // 菜单栏显示设置
                 menuBarDisplaySettings
             }
             .padding(16)
-            .animation(.easeInOut(duration: 0.25), value: appSettings.autoRefreshEnabled)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: appSettings.autoRefreshEnabled)
         }
+    }
+    
+    /// 刷新间隔按钮
+    private func refreshIntervalButton(_ interval: TimeInterval) -> some View {
+        let isSelected = appSettings.refreshInterval == interval
+        
+        return Button(action: {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                appSettings.refreshInterval = interval
+            }
+        }) {
+            Text(appSettings.intervalDescription(interval))
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(isSelected ? Color.blue : Color(nsColor: .windowBackgroundColor))
+                        .shadow(color: isSelected ? Color.blue.opacity(0.3) : .clear, radius: 4, x: 0, y: 2)
+                )
+        }
+        .buttonStyle(.plain)
     }
     
     // MARK: - 菜单栏显示设置
