@@ -52,7 +52,7 @@ enum RepeatInterval: Int, Codable, CaseIterable {
     
     var shortDescription: String {
         switch self {
-        case .never: return "1次"
+        case .never: return "不重复"
         case .oneMinute: return "1分钟"
         case .fiveMinutes: return "5分钟"
         case .fifteenMinutes: return "15分钟"

@@ -266,17 +266,15 @@ struct PriceAlertView: View {
             // 重复提醒选项
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("重复提醒")
+                    Text("提醒次数")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.secondary)
                     
                     Spacer()
                     
-                    if selectedRepeatInterval != .never {
-                        Text("持续提醒直到关闭")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
+                    Text(selectedRepeatInterval == .never ? "满足条件时只提醒1次" : "满足条件时每\(selectedRepeatInterval.shortDescription)提醒")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
                 }
                 
                 // 重复间隔选择
@@ -288,7 +286,7 @@ struct PriceAlertView: View {
                                     selectedRepeatInterval = interval
                                 }
                             }) {
-                                Text(interval.shortDescription)
+                                Text(interval == .never ? "仅1次" : "每\(interval.shortDescription)")
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(selectedRepeatInterval == interval ? .white : .primary)
                                     .padding(.horizontal, 10)
@@ -296,7 +294,7 @@ struct PriceAlertView: View {
                                     .background(
                                         RoundedRectangle(cornerRadius: 6)
                                             .fill(selectedRepeatInterval == interval ? 
-                                                  Color.accentColor : 
+                                                  (interval == .never ? Color.gray : Color.accentColor) : 
                                                   Color(nsColor: .controlBackgroundColor))
                                     )
                             }
@@ -399,18 +397,16 @@ struct AlertRowView: View {
                     Text(String(format: "%.2f", alert.targetPrice))
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                     
-                    // 重复提醒标签
-                    if alert.isRepeating {
-                        Text(alert.repeatInterval.shortDescription)
-                            .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 2)
-                            .background(
-                                RoundedRectangle(cornerRadius: 3)
-                                    .fill(Color.orange)
-                            )
-                    }
+                    // 提醒类型标签
+                    Text(alert.isRepeating ? "每\(alert.repeatInterval.shortDescription)" : "仅1次")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(alert.isRepeating ? Color.orange : Color.gray)
+                        )
                 }
                 
                 // 状态信息
@@ -419,10 +415,11 @@ struct AlertRowView: View {
                         Image(systemName: alert.isRepeating ? "bell.badge.fill" : "checkmark.circle.fill")
                             .font(.system(size: 10))
                             .foregroundStyle(alert.isRepeating ? .orange : .green)
-                        Text(alert.isRepeating ? "已提醒\(alert.triggerCount)次" : "已触发")
+                        Text("已提醒 \(alert.triggerCount) 次")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                         
+                        // 非重复提醒显示重置按钮
                         if !alert.isRepeating {
                             Button(action: onReset) {
                                 Text("重置")
@@ -431,11 +428,11 @@ struct AlertRowView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                    } else if alert.isRepeating {
-                        Image(systemName: "repeat")
+                    } else {
+                        Image(systemName: "clock")
                             .font(.system(size: 9))
                             .foregroundStyle(.tertiary)
-                        Text("重复提醒")
+                        Text("等待触发")
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }
