@@ -48,10 +48,14 @@ struct StockListView: View {
     let onOpenSettings: () -> Void
     
     @State private var stockStore = StockStore.shared
+    @State private var appSettings = AppSettings.shared
     @State private var stocks: [StockData] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var isHoveringSettings = false
+    @State private var refreshTimer: Timer?
+    @State private var lastRefreshTime: Date?
+    @State private var nextRefreshIn: Int = 0
     
     var body: some View {
         VStack(spacing: 0) {
@@ -70,12 +74,62 @@ struct StockListView: View {
         }
         .task {
             await loadStockData()
+            startAutoRefresh()
         }
         .onChange(of: stockStore.stockCodes) { _, _ in
             Task {
                 await loadStockData()
             }
         }
+        .onChange(of: appSettings.refreshInterval) { _, _ in
+            restartAutoRefresh()
+        }
+        .onChange(of: appSettings.autoRefreshEnabled) { _, _ in
+            if appSettings.autoRefreshEnabled {
+                startAutoRefresh()
+            } else {
+                stopAutoRefresh()
+            }
+        }
+        .onDisappear {
+            stopAutoRefresh()
+        }
+    }
+    
+    // MARK: - 自动刷新
+    
+    private func startAutoRefresh() {
+        guard appSettings.autoRefreshEnabled else { return }
+        stopAutoRefresh()
+        
+        let interval = appSettings.refreshInterval
+        nextRefreshIn = Int(interval)
+        
+        // 创建定时器
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            nextRefreshIn -= 1
+            
+            if nextRefreshIn <= 0 {
+                nextRefreshIn = Int(appSettings.refreshInterval)
+                
+                // 检查是否应该刷新
+                if appSettings.shouldRefresh {
+                    Task {
+                        await loadStockData()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func stopAutoRefresh() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+    
+    private func restartAutoRefresh() {
+        stopAutoRefresh()
+        startAutoRefresh()
     }
     
     // MARK: - 顶部标题栏
@@ -230,16 +284,27 @@ struct StockListView: View {
     // MARK: - 底部操作栏
     
     private var footerView: some View {
-        HStack {
+        HStack(spacing: 8) {
             // 股票数量
-            HStack(spacing: 4) {
+            HStack(spacing: 3) {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 9))
+                    .font(.system(size: 8))
                     .foregroundStyle(.yellow)
-                Text("\(stocks.count) 只自选")
+                Text("\(stocks.count)")
                     .font(.system(size: 10))
             }
             .foregroundStyle(.secondary)
+            
+            // 自动刷新状态
+            if appSettings.autoRefreshEnabled {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 8))
+                    Text("\(nextRefreshIn)s")
+                        .font(.system(size: 10, design: .monospaced))
+                }
+                .foregroundStyle(.tertiary)
+            }
             
             Spacer()
             
