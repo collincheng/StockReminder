@@ -503,16 +503,26 @@ class StockService {
     private func getHKStockData(codes: [String]) async throws -> [StockData] {
         guard !codes.isEmpty else { return [] }
         
-        let hkCodes = codes.map { "r_\($0.uppercased())" }.joined(separator: ",")
+        // 腾讯港股接口格式：r_hk00700（小写）
+        let hkCodes = codes.map { code -> String in
+            // 确保格式正确：hk + 5位数字
+            let cleanCode = code.lowercased().replacingOccurrences(of: "hk", with: "")
+            return "r_hk\(cleanCode)"
+        }.joined(separator: ",")
+        
         guard let url = URL(string: "\(tencentStockURL)\(hkCodes)") else {
             throw StockError.invalidURL
         }
+        
+        print("港股请求URL: \(url)")
         
         let (data, _) = try await URLSession.shared.data(from: url)
         
         guard let responseString = decodeGBK(data: data) ?? String(data: data, encoding: .utf8) else {
             throw StockError.decodingError
         }
+        
+        print("港股响应: \(responseString.prefix(500))")
         
         // 腾讯接口返回的是类似 JSON 的格式
         return parseHKStockResponse(responseString, codes: codes)
@@ -523,19 +533,30 @@ class StockService {
         var stocks: [StockData] = []
         
         for code in codes {
-            let upperCode = code.uppercased()
-            let pattern = "r_\(upperCode)=\"([^\"]*)\""
+            // 港股代码格式：hk00700 -> r_hk00700
+            let cleanCode = code.lowercased().replacingOccurrences(of: "hk", with: "")
+            let searchCode = "r_hk\(cleanCode)"
+            let pattern = "\(searchCode)=\"([^\"]*)\""
             
-            guard let regex = try? NSRegularExpression(pattern: pattern),
+            print("港股解析 - 搜索模式: \(pattern)")
+            
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                   let match = regex.firstMatch(in: response, range: NSRange(response.startIndex..., in: response)),
                   let range = Range(match.range(at: 1), in: response) else {
+                print("港股解析失败 - 未匹配到: \(searchCode)")
                 continue
             }
             
             let dataStr = String(response[range])
             let params = dataStr.components(separatedBy: "~")
             
-            guard params.count >= 45 else { continue }
+            print("港股解析 - 参数数量: \(params.count)")
+            
+            // 腾讯接口至少需要 45 个参数
+            guard params.count >= 45 else {
+                print("港股解析失败 - 参数不足: \(params.count)")
+                continue
+            }
             
             let name = params[1]
             let price = Double(params[3]) ?? 0
@@ -560,6 +581,7 @@ class StockService {
                 time: time
             )
             stocks.append(stock)
+            print("港股解析成功: \(name) - \(price)")
         }
         
         return stocks
