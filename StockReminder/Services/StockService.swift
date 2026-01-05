@@ -102,6 +102,9 @@ class StockService {
     /// 腾讯股票搜索接口
     private let searchURL = "https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get"
     
+    /// 新浪期货搜索接口
+    private let futureSearchURL = "http://suggest3.sinajs.cn/suggest/type=85,86,88&key="
+    
     // MARK: - 搜索股票
     
     /// 搜索股票
@@ -110,6 +113,22 @@ class StockService {
     func searchStock(keyword: String) async throws -> [StockSearchResult] {
         guard !keyword.isEmpty else { return [] }
         
+        // 检查是否是期货搜索（大写字母开头或包含期货前缀）
+        let firstChar = keyword.first ?? Character(" ")
+        let isFuture = firstChar.isUppercase || 
+                       keyword.hasPrefix("nf_") || 
+                       keyword.hasPrefix("hf_") ||
+                       keyword.hasPrefix("fx_")
+        
+        if isFuture {
+            return try await searchFutures(keyword: keyword)
+        } else {
+            return try await searchStocks(keyword: keyword)
+        }
+    }
+    
+    /// 搜索股票（腾讯接口）
+    private func searchStocks(keyword: String) async throws -> [StockSearchResult] {
         var components = URLComponents(string: searchURL)!
         components.queryItems = [URLQueryItem(name: "q", value: keyword)]
         
@@ -135,7 +154,15 @@ class StockService {
             // 构建完整代码
             var fullCode = "\(market)\(code)"
             if market == "us" {
-                fullCode = "usr_\(code)"
+                // 美股代码处理，处理包含点号的情况如 BRK.B
+                let codeParts = code.components(separatedBy: ".")
+                if codeParts.count > 1 {
+                    // 最后一部分是市场标识，去掉
+                    let usCode = codeParts.dropLast().joined(separator: ".")
+                    fullCode = "usr_\(usCode)"
+                } else {
+                    fullCode = "usr_\(code)"
+                }
             }
             
             return StockSearchResult(
@@ -143,6 +170,66 @@ class StockService {
                 name: name,
                 market: market,
                 abbreviation: abbreviation
+            )
+        }
+    }
+    
+    /// 搜索期货（新浪接口）
+    private func searchFutures(keyword: String) async throws -> [StockSearchResult] {
+        let urlString = futureSearchURL + keyword.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+        
+        guard let url = URL(string: urlString) else {
+            throw StockError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.setValue(randomUserAgent(), forHTTPHeaderField: "User-Agent")
+        
+        let (data, _) = try await URLSession.shared.data(for: request)
+        
+        // 新浪接口返回 GBK 编码
+        guard let responseString = decodeGBK(data: data) ?? String(data: data, encoding: .utf8) else {
+            return []
+        }
+        
+        // 解析格式: var suggestdata="期货代码,市场类型,代码,代码,名称,?,?,交易所;"
+        // 提取引号中的内容
+        guard let startIndex = responseString.firstIndex(of: "\""),
+              let endIndex = responseString.lastIndex(of: "\""),
+              startIndex < endIndex else {
+            return []
+        }
+        
+        let content = String(responseString[responseString.index(after: startIndex)..<endIndex])
+        guard !content.isEmpty else { return [] }
+        
+        let items = content.components(separatedBy: ";")
+        
+        return items.compactMap { item -> StockSearchResult? in
+            let parts = item.components(separatedBy: ",")
+            guard parts.count >= 5 else { return nil }
+            
+            let marketType = parts[1]  // 85=国内期货, 86=海外期货, 88=股指期货
+            var code = parts[3].uppercased()
+            let name = parts[4]
+            
+            // 根据市场类型添加前缀
+            var market = "nf"
+            if marketType == "85" || marketType == "88" {
+                code = "nf_\(code)"
+                market = "nf"
+            } else if marketType == "86" {
+                code = "hf_\(code)"
+                market = "hf"
+            }
+            
+            let exchange = parts.count > 7 ? parts[7].replacingOccurrences(of: "\"", with: "") : ""
+            
+            return StockSearchResult(
+                code: code,
+                name: name,
+                market: market,
+                abbreviation: exchange
             )
         }
     }
