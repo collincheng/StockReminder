@@ -29,20 +29,55 @@ enum AlertType: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - 重复提醒间隔选项（分钟）
+
+enum RepeatInterval: Int, Codable, CaseIterable {
+    case never = 0          // 不重复（只提醒一次）
+    case oneMinute = 1      // 1分钟
+    case fiveMinutes = 5    // 5分钟
+    case fifteenMinutes = 15 // 15分钟
+    case thirtyMinutes = 30  // 30分钟
+    case oneHour = 60       // 1小时
+    
+    var description: String {
+        switch self {
+        case .never: return "仅一次"
+        case .oneMinute: return "每1分钟"
+        case .fiveMinutes: return "每5分钟"
+        case .fifteenMinutes: return "每15分钟"
+        case .thirtyMinutes: return "每30分钟"
+        case .oneHour: return "每1小时"
+        }
+    }
+    
+    var shortDescription: String {
+        switch self {
+        case .never: return "1次"
+        case .oneMinute: return "1分钟"
+        case .fiveMinutes: return "5分钟"
+        case .fifteenMinutes: return "15分钟"
+        case .thirtyMinutes: return "30分钟"
+        case .oneHour: return "1小时"
+        }
+    }
+}
+
 // MARK: - 价格提醒模型
 
 struct PriceAlert: Identifiable, Codable {
     let id: UUID
-    let stockCode: String       // 股票代码
-    var stockName: String       // 股票名称
-    let alertType: AlertType    // 提醒类型
-    let targetPrice: Double     // 目标价格
-    var isEnabled: Bool         // 是否启用
-    var hasTriggered: Bool      // 是否已触发
-    let createdAt: Date         // 创建时间
-    var triggeredAt: Date?      // 触发时间
+    let stockCode: String           // 股票代码
+    var stockName: String           // 股票名称
+    let alertType: AlertType        // 提醒类型
+    let targetPrice: Double         // 目标价格
+    var isEnabled: Bool             // 是否启用
+    var hasTriggered: Bool          // 是否已触发（对于重复提醒，表示当前是否在触发状态）
+    let createdAt: Date             // 创建时间
+    var triggeredAt: Date?          // 最后触发时间
+    var triggerCount: Int           // 触发次数
+    var repeatInterval: RepeatInterval // 重复提醒间隔
     
-    init(stockCode: String, stockName: String, alertType: AlertType, targetPrice: Double) {
+    init(stockCode: String, stockName: String, alertType: AlertType, targetPrice: Double, repeatInterval: RepeatInterval = .never) {
         self.id = UUID()
         self.stockCode = stockCode
         self.stockName = stockName
@@ -52,18 +87,48 @@ struct PriceAlert: Identifiable, Codable {
         self.hasTriggered = false
         self.createdAt = Date()
         self.triggeredAt = nil
+        self.triggerCount = 0
+        self.repeatInterval = repeatInterval
     }
     
-    /// 检查是否应该触发提醒
-    func shouldTrigger(currentPrice: Double) -> Bool {
-        guard isEnabled && !hasTriggered else { return false }
-        
+    /// 检查价格是否满足触发条件
+    private func priceConditionMet(currentPrice: Double) -> Bool {
         switch alertType {
         case .above:
             return currentPrice >= targetPrice
         case .below:
             return currentPrice <= targetPrice
         }
+    }
+    
+    /// 检查是否应该触发提醒
+    func shouldTrigger(currentPrice: Double) -> Bool {
+        guard isEnabled else { return false }
+        
+        // 检查价格条件
+        guard priceConditionMet(currentPrice: currentPrice) else {
+            return false
+        }
+        
+        // 如果是不重复提醒，只触发一次
+        if repeatInterval == .never {
+            return !hasTriggered
+        }
+        
+        // 重复提醒：检查距离上次提醒是否已过间隔时间
+        if let lastTrigger = triggeredAt {
+            let intervalSeconds = TimeInterval(repeatInterval.rawValue * 60)
+            let timeSinceLastTrigger = Date().timeIntervalSince(lastTrigger)
+            return timeSinceLastTrigger >= intervalSeconds
+        }
+        
+        // 从未触发过，可以触发
+        return true
+    }
+    
+    /// 是否支持重复提醒
+    var isRepeating: Bool {
+        repeatInterval != .never
     }
 }
 
@@ -116,12 +181,13 @@ class PriceAlertManager {
     // MARK: - 提醒管理
     
     /// 添加价格提醒
-    func addAlert(stockCode: String, stockName: String, alertType: AlertType, targetPrice: Double) {
+    func addAlert(stockCode: String, stockName: String, alertType: AlertType, targetPrice: Double, repeatInterval: RepeatInterval = .never) {
         let alert = PriceAlert(
             stockCode: stockCode,
             stockName: stockName,
             alertType: alertType,
-            targetPrice: targetPrice
+            targetPrice: targetPrice,
+            repeatInterval: repeatInterval
         )
         alerts.append(alert)
     }
@@ -161,7 +227,8 @@ class PriceAlertManager {
         alerts.filter { 
             $0.stockCode.lowercased() == stockCode.lowercased() && 
             $0.isEnabled && 
-            !$0.hasTriggered 
+            // 重复提醒始终算活跃，非重复提醒只有未触发才算活跃
+            ($0.isRepeating || !$0.hasTriggered)
         }.count
     }
     
@@ -191,6 +258,7 @@ class PriceAlertManager {
         if let index = alerts.firstIndex(where: { $0.id == alert.id }) {
             alerts[index].hasTriggered = true
             alerts[index].triggeredAt = Date()
+            alerts[index].triggerCount += 1
         }
         
         // 发送系统通知
@@ -200,7 +268,15 @@ class PriceAlertManager {
     /// 发送系统通知
     private func sendNotification(alert: PriceAlert, currentPrice: Double) {
         let content = UNMutableNotificationContent()
-        content.title = "📈 价格提醒"
+        
+        // 获取最新的触发次数
+        let triggerCount = (alerts.first(where: { $0.id == alert.id })?.triggerCount ?? 1)
+        
+        if alert.isRepeating && triggerCount > 1 {
+            content.title = "📈 价格提醒 (第\(triggerCount)次)"
+        } else {
+            content.title = "📈 价格提醒"
+        }
         content.subtitle = alert.stockName
         
         let priceStr = String(format: "%.2f", currentPrice)
@@ -215,9 +291,9 @@ class PriceAlertManager {
         
         content.sound = .default
         
-        // 创建通知请求
+        // 创建通知请求 - 使用唯一ID确保每次都能发送
         let request = UNNotificationRequest(
-            identifier: alert.id.uuidString,
+            identifier: "\(alert.id.uuidString)-\(Date().timeIntervalSince1970)",
             content: content,
             trigger: nil // 立即发送
         )
@@ -227,7 +303,7 @@ class PriceAlertManager {
             if let error = error {
                 print("发送通知失败: \(error)")
             } else {
-                print("通知已发送: \(alert.stockName)")
+                print("通知已发送: \(alert.stockName) (第\(triggerCount)次)")
             }
         }
     }

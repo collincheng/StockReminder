@@ -17,6 +17,7 @@ struct PriceAlertView: View {
     @State private var selectedAlertType: AlertType = .above
     @State private var targetPriceText: String = ""
     @State private var showAddAlert = false
+    @State private var selectedRepeatInterval: RepeatInterval = .never
     
     private var stockAlerts: [PriceAlert] {
         alertManager.getAlerts(forStock: stock.code)
@@ -261,6 +262,49 @@ struct PriceAlertView: View {
                 }
             }
             
+            // 重复提醒选项
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("重复提醒")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    
+                    Spacer()
+                    
+                    if selectedRepeatInterval != .never {
+                        Text("持续提醒直到关闭")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                
+                // 重复间隔选择
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(RepeatInterval.allCases, id: \.self) { interval in
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    selectedRepeatInterval = interval
+                                }
+                            }) {
+                                Text(interval.shortDescription)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(selectedRepeatInterval == interval ? .white : .primary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(selectedRepeatInterval == interval ? 
+                                                  Color.accentColor : 
+                                                  Color(nsColor: .controlBackgroundColor))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            
             Spacer()
             
             // 添加按钮
@@ -317,11 +361,14 @@ struct PriceAlertView: View {
             stockCode: stock.code,
             stockName: stock.name,
             alertType: selectedAlertType,
-            targetPrice: targetPrice
+            targetPrice: targetPrice,
+            repeatInterval: selectedRepeatInterval
         )
         
         withAnimation(.easeInOut(duration: 0.2)) {
             showAddAlert = false
+            // 重置状态
+            selectedRepeatInterval = .never
         }
     }
 }
@@ -350,23 +397,46 @@ struct AlertRowView: View {
                         .foregroundStyle(.secondary)
                     Text(String(format: "%.2f", alert.targetPrice))
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    
+                    // 重复提醒标签
+                    if alert.isRepeating {
+                        Text(alert.repeatInterval.shortDescription)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 2)
+                            .background(
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Color.orange)
+                            )
+                    }
                 }
                 
-                if alert.hasTriggered {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
+                // 状态信息
+                HStack(spacing: 4) {
+                    if alert.triggerCount > 0 {
+                        Image(systemName: alert.isRepeating ? "bell.badge.fill" : "checkmark.circle.fill")
                             .font(.system(size: 10))
-                            .foregroundStyle(.green)
-                        Text("已触发")
+                            .foregroundStyle(alert.isRepeating ? .orange : .green)
+                        Text(alert.isRepeating ? "已提醒\(alert.triggerCount)次" : "已触发")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                         
-                        Button(action: onReset) {
-                            Text("重置")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.blue)
+                        if !alert.isRepeating {
+                            Button(action: onReset) {
+                                Text("重置")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.blue)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
+                    } else if alert.isRepeating {
+                        Image(systemName: "repeat")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                        Text("重复提醒")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
                     }
                 }
             }
@@ -381,7 +451,8 @@ struct AlertRowView: View {
                 ))
                 .toggleStyle(.switch)
                 .scaleEffect(0.7)
-                .disabled(alert.hasTriggered)
+                // 重复提醒始终可以切换，非重复提醒触发后禁用
+                .disabled(!alert.isRepeating && alert.hasTriggered)
                 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
@@ -393,7 +464,8 @@ struct AlertRowView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .opacity(alert.hasTriggered ? 0.6 : 1)
+        // 重复提醒不降低透明度
+        .opacity((!alert.isRepeating && alert.hasTriggered) ? 0.6 : 1)
     }
 }
 
