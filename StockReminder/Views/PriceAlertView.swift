@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+// MARK: - 输入模式
+enum InputMode: String, CaseIterable {
+    case percent = "涨幅"
+    case price = "价格"
+}
+
 // MARK: - 价格提醒设置视图
 
 struct PriceAlertView: View {
@@ -16,10 +22,32 @@ struct PriceAlertView: View {
     private var alertManager: PriceAlertManager { PriceAlertManager.shared }
     
     @State private var selectedAlertType: AlertType = .above
+    @State private var targetPercentText: String = ""
     @State private var targetPriceText: String = ""
+    @State private var inputMode: InputMode = .percent
     @State private var showAddAlert = false
     @State private var selectedRepeatInterval: RepeatInterval = .never
     @State private var isHoveringAddButton = false
+    
+    /// 最终目标价格（根据输入模式计算）
+    private var finalTargetPrice: Double? {
+        switch inputMode {
+        case .percent:
+            guard let percent = Double(targetPercentText) else { return nil }
+            let basePrice = stock.yestclose > 0 ? stock.yestclose : stock.price
+            return basePrice * (1 + percent / 100)
+        case .price:
+            return Double(targetPriceText)
+        }
+    }
+    
+    /// 根据价格计算对应的涨幅
+    private var calculatedPercent: Double? {
+        guard let price = Double(targetPriceText) else { return nil }
+        let basePrice = stock.yestclose > 0 ? stock.yestclose : stock.price
+        guard basePrice > 0 else { return nil }
+        return (price / basePrice - 1) * 100
+    }
     
     private var stockAlerts: [PriceAlert] {
         alertManager.getAlerts(forStock: stock.code)
@@ -60,10 +88,13 @@ struct PriceAlertView: View {
                 }
             }
         }
-        .frame(width: 340, height: 480)
+        .frame(width: 340, height: 500)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .onAppear {
+            // 默认设置为当前涨跌幅
+            targetPercentText = String(format: "%.2f", stock.percent)
             targetPriceText = String(format: "%.2f", stock.price)
+            selectedAlertType = stock.percent >= 0 ? .above : .below
         }
     }
     
@@ -390,48 +421,146 @@ struct PriceAlertView: View {
                 .padding(16)
                 .background(cardBackground)
                 
-                // 目标价格输入
+                // 目标设置
                 VStack(alignment: .leading, spacing: 12) {
-                    sectionHeader(title: "目标价格", icon: "dollarsign.circle")
-                    
-                    // 价格输入框
-                    HStack(spacing: 12) {
-                        HStack {
-                            Text("¥")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            
-                            TextField("输入价格", text: $targetPriceText)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(nsColor: .controlBackgroundColor))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.accentColor.opacity(0.3), lineWidth: 2)
-                                )
-                        )
+                    // 模式切换
+                    HStack {
+                        sectionHeader(title: "目标设置", icon: inputMode == .percent ? "percent" : "dollarsign.circle")
+                        Spacer()
                         
-                        // 调整按钮
-                        VStack(spacing: 4) {
-                            adjustButton(icon: "plus", action: { adjustPrice(by: 0.01) })
-                            adjustButton(icon: "minus", action: { adjustPrice(by: -0.01) })
+                        // 模式切换 Picker
+                        Picker("", selection: $inputMode) {
+                            ForEach(InputMode.allCases, id: \.self) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .frame(width: 120)
                     }
                     
-                    // 快捷价格按钮
-                    HStack(spacing: 8) {
-                        ForEach([-5, -3, 3, 5, 10], id: \.self) { percent in
-                            quickPriceButton(percent: percent)
+                    // 根据模式显示不同的输入框
+                    if inputMode == .percent {
+                        // 涨幅输入框
+                        HStack(spacing: 12) {
+                            HStack {
+                                TextField("输入涨幅", text: $targetPercentText)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                                    .multilineTextAlignment(.trailing)
+                                
+                                Text("%")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.accentColor.opacity(0.3), lineWidth: 2)
+                                    )
+                            )
+                            
+                            // 调整按钮
+                            VStack(spacing: 4) {
+                                adjustButton(icon: "plus", action: { adjustPercent(by: 0.5) })
+                                adjustButton(icon: "minus", action: { adjustPercent(by: -0.5) })
+                            }
+                        }
+                        
+                        // 快捷涨幅按钮
+                        HStack(spacing: 8) {
+                            ForEach([-5, -3, 3, 5, 10], id: \.self) { percent in
+                                quickPercentButton(percent: percent)
+                            }
+                        }
+                        
+                        // 目标价格预览
+                        if let targetPrice = finalTargetPrice {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.blue.opacity(0.8))
+                                Text("目标价格：")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                Text("¥\(String(format: "%.2f", targetPrice))")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(targetPrice > stock.price ? .red : (targetPrice < stock.price ? .green : .primary))
+                                
+                                Spacer()
+                                
+                                Text("基于昨收 ¥\(String(format: "%.2f", stock.yestclose))")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.top, 4)
+                        }
+                    } else {
+                        // 价格输入框
+                        HStack(spacing: 12) {
+                            HStack {
+                                Text("¥")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                
+                                TextField("输入价格", text: $targetPriceText)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(nsColor: .controlBackgroundColor))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.accentColor.opacity(0.3), lineWidth: 2)
+                                    )
+                            )
+                            
+                            // 调整按钮
+                            VStack(spacing: 4) {
+                                adjustButton(icon: "plus", action: { adjustPrice(by: 0.01) })
+                                adjustButton(icon: "minus", action: { adjustPrice(by: -0.01) })
+                            }
+                        }
+                        
+                        // 快捷价格按钮（基于昨收价）
+                        HStack(spacing: 8) {
+                            ForEach([-5, -3, 3, 5, 10], id: \.self) { percent in
+                                quickPriceButton(percent: percent)
+                            }
+                        }
+                        
+                        // 涨幅预览
+                        if let percent = calculatedPercent {
+                            HStack(spacing: 6) {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.blue.opacity(0.8))
+                                Text("对应涨幅：")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                Text("\(percent >= 0 ? "+" : "")\(String(format: "%.2f", percent))%")
+                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(percent > 0 ? .red : (percent < 0 ? .green : .primary))
+                                
+                                Spacer()
+                                
+                                Text("基于昨收 ¥\(String(format: "%.2f", stock.yestclose))")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.top, 4)
                         }
                     }
                 }
                 .padding(16)
                 .background(cardBackground)
+                .animation(.easeInOut(duration: 0.2), value: inputMode)
                 
                 // 重复提醒选项
                 VStack(alignment: .leading, spacing: 12) {
@@ -478,18 +607,18 @@ struct PriceAlertView: View {
                         RoundedRectangle(cornerRadius: 14)
                             .fill(
                                 LinearGradient(
-                                    colors: Double(targetPriceText) != nil ? 
+                                    colors: finalTargetPrice != nil ? 
                                         [Color.blue, Color.blue.opacity(0.8)] : 
                                         [Color.gray, Color.gray.opacity(0.8)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .shadow(color: Double(targetPriceText) != nil ? .blue.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                            .shadow(color: finalTargetPrice != nil ? .blue.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
                     )
                 }
                 .buttonStyle(.plain)
-                .disabled(Double(targetPriceText) == nil)
+                .disabled(finalTargetPrice == nil)
             }
             .padding(16)
         }
@@ -551,8 +680,9 @@ struct PriceAlertView: View {
                             .stroke(isSelected ? typeColor.opacity(0.3) : Color.clear, lineWidth: 2)
                     )
             )
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
     }
     
     private func adjustButton(icon: String, action: @escaping () -> Void) -> some View {
@@ -569,15 +699,35 @@ struct PriceAlertView: View {
         .buttonStyle(.plain)
     }
     
-    private func quickPriceButton(percent: Int) -> some View {
+    private func quickPercentButton(percent: Int) -> some View {
         let isUp = percent > 0
         let color: Color = isUp ? .red : .green
         
         return Button(action: {
-            // 基于昨收价计算目标价格
-            let basePrice = stock.yestclose > 0 ? stock.yestclose : stock.price
-            let newPrice = basePrice * (1 + Double(percent) / 100)
-            targetPriceText = String(format: "%.2f", newPrice)
+            targetPercentText = "\(percent)"
+            selectedAlertType = isUp ? .above : .below
+        }) {
+            Text("\(isUp ? "+" : "")\(percent)%")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(color.opacity(0.1))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func quickPriceButton(percent: Int) -> some View {
+        let isUp = percent > 0
+        let color: Color = isUp ? .red : .green
+        let basePrice = stock.yestclose > 0 ? stock.yestclose : stock.price
+        let targetPrice = basePrice * (1 + Double(percent) / 100)
+        
+        return Button(action: {
+            targetPriceText = String(format: "%.2f", targetPrice)
             selectedAlertType = isUp ? .above : .below
         }) {
             Text("\(isUp ? "+" : "")\(percent)%")
@@ -616,14 +766,24 @@ struct PriceAlertView: View {
         .buttonStyle(.plain)
     }
     
+    private func adjustPercent(by amount: Double) {
+        if let current = Double(targetPercentText) {
+            targetPercentText = String(format: "%.2f", current + amount)
+        } else {
+            targetPercentText = String(format: "%.2f", amount)
+        }
+    }
+    
     private func adjustPrice(by amount: Double) {
         if let current = Double(targetPriceText) {
             targetPriceText = String(format: "%.2f", current + amount)
+        } else {
+            targetPriceText = String(format: "%.2f", stock.price + amount)
         }
     }
     
     private func addAlert() {
-        guard let targetPrice = Double(targetPriceText) else { return }
+        guard let targetPrice = finalTargetPrice else { return }
         
         alertManager.addAlert(
             stockCode: stock.code,
