@@ -69,9 +69,9 @@ struct StockListView: View {
     let onOpenSettings: () -> Void
     let onOpenPriceAlert: (StockData) -> Void
     
-    // 使用后台刷新服务
-    @State private var backgroundService = BackgroundRefreshService.shared
-    @State private var appSettings = AppSettings.shared
+    // 使用后台刷新服务（直接引用单例，让 @Observable 自动追踪变化）
+    private var backgroundService: BackgroundRefreshService { BackgroundRefreshService.shared }
+    private var appSettings: AppSettings { AppSettings.shared }
     @State private var isHoveringSettings = false
     
     // 从后台服务获取数据
@@ -320,7 +320,7 @@ struct StockRowView: View {
     let onOpenPriceAlert: () -> Void
     
     @State private var isHovering = false
-    @State private var alertManager = PriceAlertManager.shared
+    private var alertManager: PriceAlertManager { PriceAlertManager.shared }
     
     private var alertCount: Int {
         alertManager.activeAlertCount(forStock: stock.code)

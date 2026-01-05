@@ -13,7 +13,8 @@ struct PriceAlertView: View {
     let stock: StockData
     let onDismiss: () -> Void
     
-    @State private var alertManager = PriceAlertManager.shared
+    private var alertManager: PriceAlertManager { PriceAlertManager.shared }
+    
     @State private var selectedAlertType: AlertType = .above
     @State private var targetPriceText: String = ""
     @State private var showAddAlert = false

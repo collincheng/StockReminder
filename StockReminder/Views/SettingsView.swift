@@ -12,8 +12,10 @@ import SwiftUI
 struct SettingsContainerView: View {
     let onBack: () -> Void
     
-    @State private var stockStore = StockStore.shared
-    @State private var appSettings = AppSettings.shared
+    // 使用 @Bindable 来支持绑定
+    @Bindable private var stockStore = StockStore.shared
+    @Bindable private var appSettings = AppSettings.shared
+    
     @State private var searchText = ""
     @State private var searchResults: [StockSearchResult] = []
     @State private var isSearching = false

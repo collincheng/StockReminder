@@ -130,7 +130,8 @@ class BackgroundRefreshService {
     // MARK: - 数据加载
     
     func loadStockData() async {
-        guard !stockStore.stockCodes.isEmpty else {
+        let codes = stockStore.stockCodes
+        guard !codes.isEmpty else {
             await MainActor.run {
                 stocks = []
                 isLoading = false
@@ -144,14 +145,18 @@ class BackgroundRefreshService {
         }
         
         do {
-            let data = try await StockService.shared.getStockData(codes: stockStore.stockCodes)
+            let data = try await StockService.shared.getStockData(codes: codes)
+            
+            // 按照 stockStore.stockCodes 的顺序排列
+            let sortedData = sortStocksByOrder(stocks: data, order: codes)
+            
             await MainActor.run {
-                stocks = data
+                stocks = sortedData
                 isLoading = false
                 lastRefreshTime = Date()
                 
                 // 检查价格提醒
-                alertManager.checkPrices(stocks: data)
+                alertManager.checkPrices(stocks: sortedData)
             }
         } catch {
             await MainActor.run {
@@ -159,6 +164,23 @@ class BackgroundRefreshService {
                 isLoading = false
             }
         }
+    }
+    
+    /// 按照指定顺序排列股票
+    private func sortStocksByOrder(stocks: [StockData], order: [String]) -> [StockData] {
+        var stockDict: [String: StockData] = [:]
+        for stock in stocks {
+            stockDict[stock.code.lowercased()] = stock
+        }
+        
+        var sortedStocks: [StockData] = []
+        for code in order {
+            if let stock = stockDict[code.lowercased()] {
+                sortedStocks.append(stock)
+            }
+        }
+        
+        return sortedStocks
     }
     
     /// 手动刷新
