@@ -243,16 +243,20 @@ class StockService {
         guard !codes.isEmpty else { return [] }
         
         // 分离港股和其他股票
-        var otherCodes: [String] = []
-        var hkCodes: [String] = []
+        var otherCodesTemp: [String] = []
+        var hkCodesTemp: [String] = []
         
         for code in codes {
             if code.hasPrefix("hk") {
-                hkCodes.append(code)
+                hkCodesTemp.append(code)
             } else {
-                otherCodes.append(code)
+                otherCodesTemp.append(code)
             }
         }
+        
+        // 创建不可变副本以安全地在并发代码中使用
+        let otherCodes = otherCodesTemp
+        let hkCodes = hkCodesTemp
         
         // 并发请求
         async let otherStocks = getStockDataFromSina(codes: otherCodes)
