@@ -615,6 +615,22 @@ struct StockRowView: View {
                 isHovering = hovering
             }
         }
+        .onTapGesture {
+            // 点击切换菜单栏显示的股票
+            if appSettings.showStockInMenuBar {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    if isMenuBarStock {
+                        // 如果已经是菜单栏股票，取消显示
+                        appSettings.menuBarStockCode = ""
+                    } else {
+                        // 设置为菜单栏显示的股票
+                        appSettings.menuBarStockCode = stock.code
+                    }
+                }
+                // 切换后关闭 popover
+                NotificationCenter.default.post(name: .closePopover, object: nil)
+            }
+        }
         .contextMenu {
             // 右键菜单
             Button(action: onOpenPriceAlert) {

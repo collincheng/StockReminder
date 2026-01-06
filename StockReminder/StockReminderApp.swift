@@ -63,6 +63,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: .menuBarDisplayDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(closePopover),
+            name: .closePopover,
+            object: nil
+        )
     }
     
     @objc func togglePopover() {
@@ -74,6 +80,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // 激活应用以确保 popover 获得焦点
                 NSApp.activate(ignoringOtherApps: true)
             }
+        }
+    }
+    
+    @objc func closePopover() {
+        if popover.isShown {
+            popover.performClose(nil)
         }
     }
     

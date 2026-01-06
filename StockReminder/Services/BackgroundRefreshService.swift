@@ -244,5 +244,6 @@ extension Notification.Name {
     static let refreshIntervalDidChange = Notification.Name("refreshIntervalDidChange")
     static let autoRefreshDidChange = Notification.Name("autoRefreshDidChange")
     static let menuBarDisplayDidChange = Notification.Name("menuBarDisplayDidChange")
+    static let closePopover = Notification.Name("closePopover")
 }
 
