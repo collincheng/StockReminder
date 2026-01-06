@@ -509,97 +509,119 @@ struct StockRowView: View {
     }
     
     var body: some View {
-        HStack(spacing: 12) {
-            // 左侧：涨跌指示条
-            RoundedRectangle(cornerRadius: 2)
-                .fill(priceColor.opacity(0.8))
-                .frame(width: 3, height: 36)
-            
-            // 中间：名称和代码
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(stock.name)
-                        .font(.system(size: 14, weight: .medium))
-                        .lineLimit(1)
-                    
-                    // 菜单栏显示标记
-                    if isMenuBarStock && appSettings.showStockInMenuBar {
-                        Image(systemName: "menubar.rectangle")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.purple)
-                            .padding(3)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.purple.opacity(0.1))
-                            )
-                    }
-                    
-                    // 提醒图标
-                    if alertCount > 0 || isHovering {
-                        Button(action: onOpenPriceAlert) {
-                            HStack(spacing: 2) {
-                                Image(systemName: alertCount > 0 ? "bell.fill" : "bell")
-                                    .font(.system(size: 10))
-                                if alertCount > 0 {
-                                    Text("\(alertCount)")
-                                        .font(.system(size: 9, weight: .semibold))
-                                }
-                            }
-                            .foregroundStyle(alertCount > 0 ? .orange : .secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule()
-                                    .fill(alertCount > 0 ? Color.orange.opacity(0.15) : Color(nsColor: .controlBackgroundColor))
-                            )
+        Button(action: {
+            // 点击切换菜单栏显示的股票
+            if appSettings.showStockInMenuBar {
+                if isMenuBarStock {
+                    // 如果已经是菜单栏股票，取消显示
+                    appSettings.menuBarStockCode = ""
+                } else {
+                    // 设置为菜单栏显示的股票
+                    appSettings.menuBarStockCode = stock.code
+                }
+                // 切换后关闭 popover
+                NotificationCenter.default.post(name: .closePopover, object: nil)
+            }
+        }) {
+            HStack(spacing: 12) {
+                // 左侧：涨跌指示条
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(priceColor.opacity(0.8))
+                    .frame(width: 3, height: 36)
+                
+                // 中间：名称和代码
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Text(stock.name)
+                            .font(.system(size: 14, weight: .medium))
+                            .lineLimit(1)
+                        
+                        // 菜单栏显示标记
+                        if isMenuBarStock && appSettings.showStockInMenuBar {
+                            Image(systemName: "menubar.rectangle")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.purple)
+                                .padding(3)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.purple.opacity(0.1))
+                                )
                         }
-                        .buttonStyle(.plain)
-                        .transition(.scale.combined(with: .opacity))
+                        
+                        // 提醒图标
+                        if alertCount > 0 || isHovering {
+                            Button(action: onOpenPriceAlert) {
+                                HStack(spacing: 2) {
+                                    Image(systemName: alertCount > 0 ? "bell.fill" : "bell")
+                                        .font(.system(size: 10))
+                                    if alertCount > 0 {
+                                        Text("\(alertCount)")
+                                            .font(.system(size: 9, weight: .semibold))
+                                    }
+                                }
+                                .foregroundStyle(alertCount > 0 ? .orange : .secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(alertCount > 0 ? Color.orange.opacity(0.15) : Color(nsColor: .controlBackgroundColor))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .highPriorityGesture(
+                                TapGesture().onEnded { _ in
+                                    onOpenPriceAlert()
+                                }
+                            )
+                            .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                    
+                    HStack(spacing: 6) {
+                        marketBadge
+                        Text(stock.code.uppercased())
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.tertiary)
                     }
                 }
                 
-                HStack(spacing: 6) {
-                    marketBadge
-                    Text(stock.code.uppercased())
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            
-            Spacer()
-            
-            // 右侧：价格和涨跌
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(String(format: "%.2f", stock.price))
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
+                Spacer()
                 
-                // 涨跌幅标签
-                HStack(spacing: 3) {
-                    Image(systemName: stock.isUp ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.system(size: 8))
-                    Text(stock.percentText)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(
-                            LinearGradient(
-                                colors: stock.isUp ? 
-                                    [Color.red, Color.red.opacity(0.8)] : 
-                                    [Color.green, Color.green.opacity(0.8)],
-                                startPoint: .top,
-                                endPoint: .bottom
+                // 右侧：价格和涨跌
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(String(format: "%.2f", stock.price))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    
+                    // 涨跌幅标签
+                    HStack(spacing: 3) {
+                        Image(systemName: stock.isUp ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
+                            .font(.system(size: 8))
+                        Text(stock.percentText)
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(
+                                LinearGradient(
+                                    colors: stock.isUp ? 
+                                        [Color.red, Color.red.opacity(0.8)] : 
+                                        [Color.green, Color.green.opacity(0.8)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
                             )
-                        )
-                )
+                    )
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(isHovering ? 
@@ -608,27 +630,10 @@ struct StockRowView: View {
                 .shadow(color: isHovering ? .black.opacity(0.05) : .clear, radius: 4, y: 2)
         )
         .scaleEffect(isPressed ? 0.98 : 1)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isPressed)
-        .contentShape(Rectangle())
+        .animation(.spring(response: 0.2, dampingFraction: 0.8), value: isPressed)
         .onHover { hovering in
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(.easeOut(duration: 0.15)) {
                 isHovering = hovering
-            }
-        }
-        .onTapGesture {
-            // 点击切换菜单栏显示的股票
-            if appSettings.showStockInMenuBar {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    if isMenuBarStock {
-                        // 如果已经是菜单栏股票，取消显示
-                        appSettings.menuBarStockCode = ""
-                    } else {
-                        // 设置为菜单栏显示的股票
-                        appSettings.menuBarStockCode = stock.code
-                    }
-                }
-                // 切换后关闭 popover
-                NotificationCenter.default.post(name: .closePopover, object: nil)
             }
         }
         .contextMenu {
