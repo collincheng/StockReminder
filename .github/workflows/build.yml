@@ -35,8 +35,7 @@ jobs:
             -scheme StockReminder \
             -configuration Release \
             -derivedDataPath build \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY="-"
 
       - name: Package app into zip
         run: |
