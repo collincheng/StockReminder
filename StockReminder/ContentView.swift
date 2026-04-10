@@ -592,7 +592,7 @@ struct StockRowView: View {
                     Text(String(format: "%.2f", stock.price))
                         .font(.system(size: 16, weight: .semibold, design: .rounded))
                         .foregroundStyle(.primary)
-                    
+
                     // 涨跌幅标签
                     HStack(spacing: 3) {
                         Image(systemName: stock.isUp ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
@@ -607,8 +607,8 @@ struct StockRowView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .fill(
                                 LinearGradient(
-                                    colors: stock.isUp ? 
-                                        [Color.red, Color.red.opacity(0.8)] : 
+                                    colors: stock.isUp ?
+                                        [Color.red, Color.red.opacity(0.8)] :
                                         [Color.green, Color.green.opacity(0.8)],
                                     startPoint: .top,
                                     endPoint: .bottom

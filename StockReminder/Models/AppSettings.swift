@@ -94,6 +94,13 @@ class AppSettings {
             NotificationCenter.default.post(name: .menuBarDisplayDidChange, object: nil)
         }
     }
+
+    /// 是否显示成交量
+    var showVolume: Bool {
+        didSet {
+            saveToUserDefaults()
+        }
+    }
     
     // MARK: - UserDefaults Keys
     
@@ -103,6 +110,7 @@ class AppSettings {
     private let showStockInMenuBarKey = "showStockInMenuBar"
     private let menuBarStockCodeKey = "menuBarStockCode"
     private let menuBarDisplayTypeKey = "menuBarDisplayType"
+    private let showVolumeKey = "showVolume"
     
     // MARK: - 初始化
     
@@ -142,6 +150,13 @@ class AppSettings {
         } else {
             self.menuBarDisplayType = .percent
         }
+
+        // 成交量显示设置
+        if defaults.object(forKey: showVolumeKey) != nil {
+            self.showVolume = defaults.bool(forKey: showVolumeKey)
+        } else {
+            self.showVolume = true // 默认显示
+        }
     }
     
     private func saveToUserDefaults() {
@@ -152,6 +167,7 @@ class AppSettings {
         defaults.set(showStockInMenuBar, forKey: showStockInMenuBarKey)
         defaults.set(menuBarStockCode, forKey: menuBarStockCodeKey)
         defaults.set(menuBarDisplayType.rawValue, forKey: menuBarDisplayTypeKey)
+        defaults.set(showVolume, forKey: showVolumeKey)
     }
     
     // MARK: - 交易时间判断

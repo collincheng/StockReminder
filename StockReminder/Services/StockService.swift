@@ -20,7 +20,8 @@ struct StockData: Identifiable, Codable {
     let open: Double           // 开盘价
     let high: Double           // 最高价
     let low: Double            // 最低价
-    let volume: Double         // 成交量
+    let volume: Double         // 成交量（累计）
+    var volumeDelta: Double = 0 // 每次刷新间的成交增量
     let amount: Double         // 成交额
     let time: String           // 更新时间
     
@@ -41,6 +42,26 @@ struct StockData: Identifiable, Codable {
         return String(format: "%@%.2f%%", sign, percent)
     }
     
+    /// 格式化的实时成交量字符串（每次刷新间的增量，以手为单位）
+    var volumeText: String {
+        // A股: API 返回股数，1手=100股；期货/港股/美股: 直接用
+        let lots: Double
+        switch marketType {
+        case .aStock:
+            lots = volumeDelta / 100
+        default:
+            lots = volumeDelta
+        }
+
+        if lots >= 1_0000_0000 {
+            return String(format: "%.2f亿手", lots / 1_0000_0000)
+        } else if lots >= 10000 {
+            return String(format: "%.0f万手", lots / 10000)
+        } else {
+            return String(format: "%.0f手", lots)
+        }
+    }
+
     /// 是否上涨
     var isUp: Bool {
         updown >= 0

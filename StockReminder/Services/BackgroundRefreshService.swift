@@ -15,6 +15,9 @@ class BackgroundRefreshService {
     
     /// 最新的股票数据
     var stocks: [StockData] = []
+
+    /// 上次各股票的累计成交量，用于计算增量
+    private var previousVolumes: [String: Double] = [:]
     
     /// 是否正在加载
     var isLoading = false
@@ -194,8 +197,16 @@ class BackgroundRefreshService {
             let data = try await StockService.shared.getStockData(codes: codes)
             
             // 按照 stockStore.stockCodes 的顺序排列
-            let sortedData = sortStocksByOrder(stocks: data, order: codes)
-            
+            var sortedData = sortStocksByOrder(stocks: data, order: codes)
+
+            // 计算每只股票的成交增量
+            for i in sortedData.indices {
+                let key = sortedData[i].code.lowercased()
+                let prev = previousVolumes[key] ?? sortedData[i].volume
+                sortedData[i].volumeDelta = max(sortedData[i].volume - prev, 0)
+                previousVolumes[key] = sortedData[i].volume
+            }
+
             await MainActor.run {
                 stocks = sortedData
                 isLoading = false

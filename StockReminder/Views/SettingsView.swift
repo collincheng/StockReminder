@@ -586,6 +586,44 @@ struct SettingsContainerView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
                 
+                // 显示成交量开关
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.orange.opacity(0.2), Color.orange.opacity(0.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 40, height: 40)
+
+                        Image(systemName: "chart.bar.fill")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.orange)
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("显示成交量")
+                            .font(.system(size: 14, weight: .semibold))
+                        Text("在股价旁显示实时成交量")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Toggle("", isOn: $appSettings.showVolume)
+                        .toggleStyle(.switch)
+                        .scaleEffect(0.85)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+
                 // 菜单栏显示设置
                 menuBarDisplaySettings
                 
