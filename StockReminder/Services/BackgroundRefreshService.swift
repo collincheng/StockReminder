@@ -18,7 +18,7 @@ class BackgroundRefreshService {
 
     /// 上次各股票的累计成交量，用于计算增量
     private var previousVolumes: [String: Double] = [:]
-    /// 上次各股票的价格，用于判断成交量涨跌颜色
+    /// 上次各股票的价格，用于无买卖盘数据时的回退判断
     private var previousPrices: [String: Double] = [:]
     
     /// 是否正在加载
@@ -201,15 +201,32 @@ class BackgroundRefreshService {
             // 按照 stockStore.stockCodes 的顺序排列
             var sortedData = sortStocksByOrder(stocks: data, order: codes)
 
-            // 计算每只股票的成交增量和价格涨跌
+            // 计算每只股票的成交增量和买卖方向
             for i in sortedData.indices {
                 let key = sortedData[i].code.lowercased()
                 let prevVol = previousVolumes[key] ?? sortedData[i].volume
                 sortedData[i].volumeDelta = max(sortedData[i].volume - prevVol, 0)
-                let prevPrice = previousPrices[key] ?? sortedData[i].price
-                sortedData[i].volumeIsUp = sortedData[i].price >= prevPrice
+
+                // 判断成交量颜色：有买一卖一数据时用盘口判断，否则用价格变化
+                let price = sortedData[i].price
+                let sell1 = sortedData[i].sell1Price
+                let buy1 = sortedData[i].buy1Price
+                if sell1 > 0 && buy1 > 0 {
+                    // 成交价 >= 卖一 → 主动买入(红)，<= 买一 → 主动卖出(绿)，中间保持上次
+                    if price >= sell1 {
+                        sortedData[i].volumeIsUp = true
+                    } else if price <= buy1 {
+                        sortedData[i].volumeIsUp = false
+                    }
+                    // 买一和卖一之间：保持默认值(true)，不改变
+                } else {
+                    // 无盘口数据(美股/期货)，用价格变化判断
+                    let prevPrice = previousPrices[key] ?? price
+                    sortedData[i].volumeIsUp = price >= prevPrice
+                }
+
                 previousVolumes[key] = sortedData[i].volume
-                previousPrices[key] = sortedData[i].price
+                previousPrices[key] = price
             }
 
             await MainActor.run {

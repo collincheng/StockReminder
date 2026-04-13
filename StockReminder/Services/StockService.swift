@@ -21,8 +21,10 @@ struct StockData: Identifiable, Codable {
     let high: Double           // 最高价
     let low: Double            // 最低价
     let volume: Double         // 成交量（累计）
+    let buy1Price: Double      // 买一价
+    let sell1Price: Double     // 卖一价
     var volumeDelta: Double = 0  // 每次刷新间的成交增量
-    var volumeIsUp: Bool = true  // 成交增量是否比上次大（放量/缩量）
+    var volumeIsUp: Bool = true  // 主动买入(红)/主动卖出(绿)
     let amount: Double         // 成交额
     let time: String           // 更新时间
     
@@ -374,12 +376,14 @@ class StockService {
         let amount = Double(params[9]) ?? 0
         let time = "\(params[30]) \(params[31])"
         
+        let buy1Price = Double(params[6]) ?? 0
+        let sell1Price = Double(params[7]) ?? 0
+
         // 如果当前价为0，使用买一价或昨收价
         if price == 0 {
-            let buy1 = Double(params[6]) ?? 0
-            price = buy1 != 0 ? buy1 : yestclose
+            price = buy1Price != 0 ? buy1Price : yestclose
         }
-        
+
         return StockData(
             code: code,
             name: name,
@@ -389,6 +393,8 @@ class StockService {
             high: high,
             low: low,
             volume: volume,
+            buy1Price: buy1Price,
+            sell1Price: sell1Price,
             amount: amount,
             time: time
         )
@@ -422,11 +428,13 @@ class StockService {
             high: high,
             low: low,
             volume: volume,
+            buy1Price: 0,
+            sell1Price: 0,
             amount: 0,
             time: time
         )
     }
-    
+
     /// 解析美股数据 (gb_ 开头，旧格式)
     private func parseGBStock(code: String, params: [String]) -> StockData? {
         guard params.count >= 27 else { return nil }
@@ -448,11 +456,13 @@ class StockService {
             high: high,
             low: low,
             volume: volume,
+            buy1Price: 0,
+            sell1Price: 0,
             amount: 0,
             time: ""
         )
     }
-    
+
     /// 解析国内期货数据
     private func parseCNFuture(code: String, params: [String]) -> StockData? {
         guard params.count >= 15 else { return nil }
@@ -487,11 +497,13 @@ class StockService {
             high: high,
             low: low,
             volume: volume,
+            buy1Price: 0,
+            sell1Price: 0,
             amount: 0,
             time: ""
         )
     }
-    
+
     /// 解析海外期货数据
     private func parseOverseaFuture(code: String, params: [String]) -> StockData? {
         guard params.count >= 14 else { return nil }
@@ -520,11 +532,13 @@ class StockService {
             high: high,
             low: low,
             volume: volume,
+            buy1Price: 0,
+            sell1Price: 0,
             amount: 0,
             time: time
         )
     }
-    
+
     /// 获取港股数据（从腾讯接口）
     private func getHKStockData(codes: [String]) async throws -> [StockData] {
         guard !codes.isEmpty else { return [] }
@@ -594,6 +608,9 @@ class StockService {
             let amount = Double(params[37]) ?? 0
             let time = params[30]
             
+            let buy1Price = Double(params[9]) ?? 0
+            let sell1Price = Double(params[19]) ?? 0
+
             let stock = StockData(
                 code: code.lowercased(),
                 name: name,
@@ -603,6 +620,8 @@ class StockService {
                 high: high,
                 low: low,
                 volume: volume,
+                buy1Price: buy1Price,
+                sell1Price: sell1Price,
                 amount: amount,
                 time: time
             )
