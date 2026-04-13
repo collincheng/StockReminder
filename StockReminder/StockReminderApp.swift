@@ -77,9 +77,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 popover.performClose(nil)
             } else {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                // 激活应用以确保 popover 获得焦点
                 NSApp.activate(ignoringOtherApps: true)
+                // 监听失焦事件，点击 popover 外部时自动关闭
+                setupEventMonitor()
             }
+        }
+    }
+
+    private var eventMonitor: Any?
+
+    private func setupEventMonitor() {
+        removeEventMonitor()
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            if let self = self, self.popover.isShown {
+                self.popover.performClose(nil)
+            }
+        }
+    }
+
+    private func removeEventMonitor() {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
         }
     }
     
@@ -87,6 +106,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         }
+        removeEventMonitor()
     }
     
     private func startMenuBarUpdates() {
