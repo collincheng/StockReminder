@@ -21,7 +21,8 @@ struct StockData: Identifiable, Codable {
     let high: Double           // 最高价
     let low: Double            // 最低价
     let volume: Double         // 成交量（累计）
-    var volumeDelta: Double = 0 // 每次刷新间的成交增量
+    var volumeDelta: Double = 0  // 每次刷新间的成交增量
+    var volumeIsUp: Bool = true  // 成交增量是否比上次大（放量/缩量）
     let amount: Double         // 成交额
     let time: String           // 更新时间
     

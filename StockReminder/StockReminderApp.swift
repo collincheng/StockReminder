@@ -166,11 +166,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         result.append(NSAttributedString(string: priceText, attributes: priceAttributes))
 
-        // 实时成交量 - 涨红跌绿
+        // 实时成交量 - 价格比上次涨则红，跌则绿
         if appSettings.showVolume {
+            let volumeColor: NSColor = stock.volumeIsUp
+                ? NSColor(red: 0.95, green: 0.25, blue: 0.25, alpha: 1.0)
+                : NSColor(red: 0.2, green: 0.78, blue: 0.35, alpha: 1.0)
             let volumeAttributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular),
-                .foregroundColor: getStockColor(stock: stock)
+                .foregroundColor: volumeColor
             ]
             result.append(NSAttributedString(string: " \(stock.volumeText)", attributes: volumeAttributes))
         }
