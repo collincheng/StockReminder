@@ -915,6 +915,8 @@ struct AlertRowView: View {
             high: 36.00,
             low: 35.00,
             volume: 1000000,
+            buy1Price: 35.49,
+            sell1Price: 35.50,
             amount: 35000000,
             time: "15:00:00"
         ),
