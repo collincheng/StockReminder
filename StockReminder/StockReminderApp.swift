@@ -166,8 +166,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         result.append(NSAttributedString(string: priceText, attributes: priceAttributes))
 
-        // 实时成交量 - 价格比上次涨则红，跌则绿
-        if appSettings.showVolume {
+        // 实时成交量 - 仅个股 + 交易时间显示
+        if appSettings.showVolume && !stock.isIndex && appSettings.isStockTradingTime(stock.code) {
             let volumeColor: NSColor = stock.volumeIsUp
                 ? NSColor(red: 0.95, green: 0.25, blue: 0.25, alpha: 1.0)
                 : NSColor(red: 0.2, green: 0.78, blue: 0.35, alpha: 1.0)

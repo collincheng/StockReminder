@@ -69,6 +69,11 @@ struct StockData: Identifiable, Codable {
     var isUp: Bool {
         updown >= 0
     }
+
+    /// 是否是指数（指数没有逐笔成交，不显示成交量）
+    var isIndex: Bool {
+        code.hasPrefix("sh000") || code.hasPrefix("sz399") || code.hasPrefix("bj899")
+    }
     
     /// 股票市场类型
     var marketType: MarketType {
