@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Charts
 
 // MARK: - 主容器视图
 
@@ -94,7 +95,8 @@ struct StockListView: View {
     private var appSettings: AppSettings { AppSettings.shared }
     @State private var isHoveringSettings = false
     @State private var isHoveringRefresh = false
-    
+    @State private var selectedStockCode: String?
+
     // 从后台服务获取数据
     private var stocks: [StockData] { backgroundService.stocks }
     private var isLoading: Bool { backgroundService.isLoading }
@@ -102,14 +104,37 @@ struct StockListView: View {
     private var lastRefreshTime: Date? { backgroundService.lastRefreshTime }
     private var nextRefreshIn: Int { backgroundService.nextRefreshIn }
     
+    /// 当前选中的股票（用于分时图）
+    private var selectedStock: StockData? {
+        let code = selectedStockCode ?? appSettings.menuBarStockCode
+        if code.isEmpty { return stocks.first }
+        return stocks.first { $0.code.lowercased() == code.lowercased() } ?? stocks.first
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // 标题栏
             headerView
-            
+
+            // 分时图
+            if let stock = selectedStock {
+                MinuteChartView(stock: stock, minuteData: backgroundService.minuteData)
+                    .onAppear {
+                        if backgroundService.minuteChartCode != stock.code {
+                            Task { await backgroundService.loadMinuteData(code: stock.code) }
+                        }
+                    }
+                    .onChange(of: selectedStockCode) { _, newCode in
+                        let code = newCode ?? (appSettings.menuBarStockCode.isEmpty ? nil : appSettings.menuBarStockCode)
+                        if let code {
+                            Task { await backgroundService.loadMinuteData(code: code) }
+                        }
+                    }
+            }
+
             // 股票列表
             stockListView
-            
+
             // 底部操作栏
             footerView
         }
@@ -217,6 +242,8 @@ struct StockListView: View {
                     ForEach(Array(stocks.enumerated()), id: \.element.id) { index, stock in
                         StockRowView(stock: stock, onOpenPriceAlert: {
                             onOpenPriceAlert(stock)
+                        }, onSelectStock: {
+                            selectedStockCode = stock.code
                         })
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.95).combined(with: .opacity),
@@ -493,7 +520,8 @@ struct StockListView: View {
 struct StockRowView: View {
     let stock: StockData
     let onOpenPriceAlert: () -> Void
-    
+    let onSelectStock: () -> Void
+
     @State private var isHovering = false
     @State private var isPressed = false
     private var alertManager: PriceAlertManager { PriceAlertManager.shared }
@@ -510,17 +538,10 @@ struct StockRowView: View {
     
     var body: some View {
         Button(action: {
-            // 点击切换菜单栏显示的股票
+            // 点击选中股票：切换分时图 + 设为菜单栏股票
+            onSelectStock()
             if appSettings.showStockInMenuBar {
-                if isMenuBarStock {
-                    // 如果已经是菜单栏股票，取消显示
-                    appSettings.menuBarStockCode = ""
-                } else {
-                    // 设置为菜单栏显示的股票
-                    appSettings.menuBarStockCode = stock.code
-                }
-                // 切换后关闭 popover
-                NotificationCenter.default.post(name: .closePopover, object: nil)
+                appSettings.menuBarStockCode = stock.code
             }
         }) {
             HStack(spacing: 12) {
@@ -692,6 +713,127 @@ struct StockRowView: View {
         case .overseaFuture: return .indigo
         case .unknown: return .gray
         }
+    }
+}
+
+// MARK: - 分时图视图
+
+struct MinuteChartView: View {
+    let stock: StockData
+    let minuteData: [MinuteData]
+
+    private var yestclose: Double { stock.yestclose }
+
+    private var priceRange: (min: Double, max: Double) {
+        guard !minuteData.isEmpty else { return (yestclose * 0.99, yestclose * 1.01) }
+        let prices = minuteData.map(\.price)
+        let minP = min(prices.min()!, yestclose)
+        let maxP = max(prices.max()!, yestclose)
+        let padding = max((maxP - minP) * 0.1, yestclose * 0.002)
+        return (minP - padding, maxP + padding)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // 股票信息
+            HStack(spacing: 8) {
+                Text(stock.name)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(String(format: "%.2f", stock.price))
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(stock.isUp ? .red : .green)
+                Text(stock.percentText)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(stock.isUp ? .red : .green)
+                Spacer()
+                Text("昨收 \(String(format: "%.2f", yestclose))")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+
+            if minuteData.isEmpty {
+                Text("暂无分时数据")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .frame(height: 80)
+            } else {
+                // 价格折线图
+                priceChart
+                    .frame(height: 80)
+                    .padding(.horizontal, 8)
+
+                // 成交量柱状图
+                volumeChart
+                    .frame(height: 30)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+        )
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+    }
+
+    private var priceChart: some View {
+        Chart {
+            // 昨收参考线
+            RuleMark(y: .value("昨收", yestclose))
+                .lineStyle(StrokeStyle(lineWidth: 0.5, dash: [4, 3]))
+                .foregroundStyle(.secondary.opacity(0.5))
+
+            // 价格折线
+            ForEach(Array(minuteData.enumerated()), id: \.offset) { index, item in
+                LineMark(
+                    x: .value("时间", index),
+                    y: .value("价格", item.price)
+                )
+                .foregroundStyle(item.price >= yestclose ? Color.red : Color.green)
+                .lineStyle(StrokeStyle(lineWidth: 1.2))
+
+                // 填充区域
+                AreaMark(
+                    x: .value("时间", index),
+                    yStart: .value("基准", yestclose),
+                    yEnd: .value("价格", item.price)
+                )
+                .foregroundStyle(
+                    (item.price >= yestclose ? Color.red : Color.green).opacity(0.06)
+                )
+            }
+        }
+        .chartYScale(domain: priceRange.min...priceRange.max)
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                AxisValueLabel {
+                    if let v = value.as(Double.self) {
+                        Text(String(format: "%.2f", v))
+                            .font(.system(size: 8))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+    }
+
+    private var volumeChart: some View {
+        Chart {
+            ForEach(Array(minuteData.enumerated()), id: \.offset) { index, item in
+                BarMark(
+                    x: .value("时间", index),
+                    y: .value("成交量", item.volume)
+                )
+                .foregroundStyle(item.price >= yestclose ? Color.red.opacity(0.5) : Color.green.opacity(0.5))
+            }
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
     }
 }
 

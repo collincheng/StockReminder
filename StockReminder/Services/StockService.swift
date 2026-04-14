@@ -102,6 +102,15 @@ enum MarketType: String {
     case unknown = "未知"
 }
 
+/// 分时数据（每分钟一个点）
+struct MinuteData: Identifiable {
+    var id: String { time }
+    let time: String       // 时间，如 "09:30"
+    let price: Double      // 当前价
+    let volume: Double     // 该分钟成交量
+    let avgPrice: Double   // 均价
+}
+
 /// 股票搜索结果
 struct StockSearchResult: Identifiable {
     var id: String { code }
@@ -637,8 +646,112 @@ class StockService {
         return stocks
     }
     
+    // MARK: - 分时数据
+
+    /// 获取分时数据（当天每分钟价格和成交量）
+    func getMinuteData(code: String, yestclose: Double) async throws -> [MinuteData] {
+        if code.hasPrefix("hk") {
+            return try await getHKMinuteData(code: code, yestclose: yestclose)
+        } else {
+            return try await getSinaMinuteData(code: code, yestclose: yestclose)
+        }
+    }
+
+    /// 新浪分时数据（A股、美股、期货）
+    private func getSinaMinuteData(code: String, yestclose: Double) async throws -> [MinuteData] {
+        let urlString = "https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_result=/CN_MarketDataService.getKLineData?symbol=\(code)&scale=1&ma=no&datalen=240"
+        guard let url = URL(string: urlString) else { return [] }
+
+        var request = URLRequest(url: url)
+        request.setValue("http://finance.sina.com.cn/", forHTTPHeaderField: "Referer")
+        request.setValue(randomUserAgent(), forHTTPHeaderField: "User-Agent")
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        guard let responseString = String(data: data, encoding: .utf8) else { return [] }
+
+        // 响应格式: var _result=([{day:"2026-04-14 09:31:00",open:"35.50",high:...,low:...,close:"35.60",volume:"12345"}, ...])
+        // 提取 JSON 数组部分
+        guard let startIndex = responseString.firstIndex(of: "("),
+              let endIndex = responseString.lastIndex(of: ")") else { return [] }
+
+        let jsonStr = String(responseString[responseString.index(after: startIndex)..<endIndex])
+        guard let jsonData = jsonStr.data(using: .utf8),
+              let array = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: String]] else { return [] }
+
+        var runningVolume: Double = 0
+        var runningAmount: Double = 0
+        return array.compactMap { item -> MinuteData? in
+            guard let day = item["day"],
+                  let closeStr = item["close"], let close = Double(closeStr),
+                  let volStr = item["volume"], let vol = Double(volStr) else { return nil }
+
+            // 提取时间部分 "2026-04-14 09:31:00" -> "09:31"
+            let time: String
+            if day.count >= 16 {
+                let startIdx = day.index(day.startIndex, offsetBy: 11)
+                let endIdx = day.index(day.startIndex, offsetBy: 16)
+                time = String(day[startIdx..<endIdx])
+            } else {
+                time = day
+            }
+
+            runningVolume += vol
+            let price = close
+            // 用成交额/成交量近似均价，如果没有成交额就用 (open+close)/2 近似
+            if let openStr = item["open"], let openPrice = Double(openStr) {
+                runningAmount += (openPrice + close) / 2 * vol
+            }
+            let avgPrice = runningVolume > 0 ? runningAmount / runningVolume : price
+
+            return MinuteData(time: time, price: price, volume: vol, avgPrice: avgPrice)
+        }
+    }
+
+    /// 腾讯分时数据（港股）
+    private func getHKMinuteData(code: String, yestclose: Double) async throws -> [MinuteData] {
+        let cleanCode = code.lowercased().replacingOccurrences(of: "hk", with: "")
+        let urlString = "https://ifzq.gtimg.cn/appstock/app/minute/query?_var=min_data&code=hk\(cleanCode)"
+        guard let url = URL(string: urlString) else { return [] }
+
+        let (data, _) = try await URLSession.shared.data(from: url)
+        guard let responseString = String(data: data, encoding: .utf8) else { return [] }
+
+        // 提取 JSON 部分
+        guard let eqIndex = responseString.firstIndex(of: "=") else { return [] }
+        let jsonStr = String(responseString[responseString.index(after: eqIndex)...])
+        guard let jsonData = jsonStr.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let dataDict = json["data"] as? [String: Any],
+              let codeDict = dataDict["hk\(cleanCode)"] as? [String: Any],
+              let dataInfo = codeDict["data"] as? [String: Any],
+              let minuteArr = dataInfo["minute"] as? [[String: Any]] else { return [] }
+
+        var runningVolume: Double = 0
+        var runningAmount: Double = 0
+        return minuteArr.compactMap { item -> MinuteData? in
+            guard let time = item["time"] as? String,
+                  let priceStr = item["price"] as? String, let price = Double(priceStr),
+                  let volStr = item["volume"] as? String, let vol = Double(volStr) else { return nil }
+
+            // 格式化时间 "0930" -> "09:30"
+            let formattedTime: String
+            if time.count == 4 {
+                let idx = time.index(time.startIndex, offsetBy: 2)
+                formattedTime = "\(time[..<idx]):\(time[idx...])"
+            } else {
+                formattedTime = time
+            }
+
+            runningVolume += vol
+            runningAmount += price * vol
+            let avgPrice = runningVolume > 0 ? runningAmount / runningVolume : price
+
+            return MinuteData(time: formattedTime, price: price, volume: vol, avgPrice: avgPrice)
+        }
+    }
+
     // MARK: - 辅助方法
-    
+
     /// GBK 解码
     private func decodeGBK(data: Data) -> String? {
         let cfEncoding = CFStringEncodings.GB_18030_2000

@@ -21,6 +21,11 @@ class BackgroundRefreshService {
     /// 上次各股票的价格，用于无买卖盘数据时的回退判断
     private var previousPrices: [String: Double] = [:]
     
+    /// 当前选中股票的分时数据
+    var minuteData: [MinuteData] = []
+    /// 当前显示分时图的股票代码
+    var minuteChartCode: String = ""
+
     /// 是否正在加载
     var isLoading = false
     
@@ -237,6 +242,11 @@ class BackgroundRefreshService {
                 // 检查价格提醒
                 alertManager.checkPrices(stocks: sortedData)
             }
+
+            // 同步刷新分时图
+            if !minuteChartCode.isEmpty {
+                await loadMinuteData(code: minuteChartCode)
+            }
         } catch {
             await MainActor.run {
                 errorMessage = error.localizedDescription
@@ -266,6 +276,24 @@ class BackgroundRefreshService {
     func refresh() {
         Task {
             await loadStockData()
+            // 同步刷新分时图
+            if !minuteChartCode.isEmpty {
+                await loadMinuteData(code: minuteChartCode)
+            }
+        }
+    }
+
+    /// 加载分时数据
+    func loadMinuteData(code: String) async {
+        let yestclose = stocks.first { $0.code.lowercased() == code.lowercased() }?.yestclose ?? 0
+        do {
+            let data = try await StockService.shared.getMinuteData(code: code, yestclose: yestclose)
+            await MainActor.run {
+                minuteChartCode = code
+                minuteData = data
+            }
+        } catch {
+            // 分时数据加载失败不影响主流程
         }
     }
 }
