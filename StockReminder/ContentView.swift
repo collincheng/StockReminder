@@ -764,11 +764,6 @@ struct MinuteChartView: View {
                 priceChart
                     .frame(height: 80)
                     .padding(.horizontal, 8)
-
-                // 成交量柱状图
-                volumeChart
-                    .frame(height: 30)
-                    .padding(.horizontal, 8)
                     .padding(.bottom, 6)
             }
         }
@@ -822,19 +817,6 @@ struct MinuteChartView: View {
         }
     }
 
-    private var volumeChart: some View {
-        Chart {
-            ForEach(Array(minuteData.enumerated()), id: \.offset) { index, item in
-                BarMark(
-                    x: .value("时间", index),
-                    y: .value("成交量", item.volume)
-                )
-                .foregroundStyle(item.price >= yestclose ? Color.red.opacity(0.5) : Color.green.opacity(0.5))
-            }
-        }
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-    }
 }
 
 #Preview {

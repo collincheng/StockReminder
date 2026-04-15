@@ -678,12 +678,22 @@ class StockService {
         guard let jsonData = jsonStr.data(using: .utf8),
               let array = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: String]] else { return [] }
 
+        // 只保留今天的数据
+        let todayPrefix: String = {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            return formatter.string(from: Date())
+        }()
+
         var runningVolume: Double = 0
         var runningAmount: Double = 0
         return array.compactMap { item -> MinuteData? in
             guard let day = item["day"],
                   let closeStr = item["close"], let close = Double(closeStr),
                   let volStr = item["volume"], let vol = Double(volStr) else { return nil }
+
+            // 过滤掉非今天的数据
+            guard day.hasPrefix(todayPrefix) else { return nil }
 
             // 提取时间部分 "2026-04-14 09:31:00" -> "09:31"
             let time: String
