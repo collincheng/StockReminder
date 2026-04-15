@@ -724,6 +724,14 @@ struct MinuteChartView: View {
 
     private var yestclose: Double { stock.yestclose }
 
+    /// 完整交易时段分钟数（用于固定 X 轴长度）
+    private var totalTradingMinutes: Int {
+        let code = stock.code.lowercased()
+        if code.hasPrefix("hk") { return 330 }       // 09:30-12:00, 13:00-16:00
+        if code.hasPrefix("usr_") || code.hasPrefix("gb_") { return 390 } // 09:30-16:00 ET
+        return 240                                    // A股: 09:30-11:30, 13:00-15:00
+    }
+
     private var priceRange: (min: Double, max: Double) {
         guard !minuteData.isEmpty else { return (yestclose * 0.99, yestclose * 1.01) }
         let prices = minuteData.map(\.price)
@@ -803,6 +811,7 @@ struct MinuteChartView: View {
             }
         }
         .chartYScale(domain: priceRange.min...priceRange.max)
+        .chartXScale(domain: 0...(totalTradingMinutes - 1))
         .chartXAxis(.hidden)
         .chartYAxis {
             AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
