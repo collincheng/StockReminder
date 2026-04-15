@@ -663,6 +663,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return [] }
 
         var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("http://finance.sina.com.cn/", forHTTPHeaderField: "Referer")
         request.setValue(randomUserAgent(), forHTTPHeaderField: "User-Agent")
 
