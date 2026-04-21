@@ -9,6 +9,7 @@ import Foundation
 import Combine
 
 /// 后台刷新服务 - 独立于视图生命周期运行
+@MainActor
 @Observable
 class BackgroundRefreshService {
     static let shared = BackgroundRefreshService()
@@ -188,21 +189,17 @@ class BackgroundRefreshService {
     func loadStockData() async {
         let codes = stockStore.stockCodes
         guard !codes.isEmpty else {
-            await MainActor.run {
-                stocks = []
-                isLoading = false
-            }
+            stocks = []
+            isLoading = false
             return
         }
-        
-        await MainActor.run {
-            isLoading = true
-            errorMessage = nil
-        }
-        
+
+        isLoading = true
+        errorMessage = nil
+
         do {
             let data = try await StockService.shared.getStockData(codes: codes)
-            
+
             // 按照 stockStore.stockCodes 的顺序排列
             var sortedData = sortStocksByOrder(stocks: data, order: codes)
 
@@ -234,24 +231,20 @@ class BackgroundRefreshService {
                 previousPrices[key] = price
             }
 
-            await MainActor.run {
-                stocks = sortedData
-                isLoading = false
-                lastRefreshTime = Date()
-                
-                // 检查价格提醒
-                alertManager.checkPrices(stocks: sortedData)
-            }
+            stocks = sortedData
+            isLoading = false
+            lastRefreshTime = Date()
+
+            // 检查价格提醒
+            alertManager.checkPrices(stocks: sortedData)
 
             // 同步刷新分时图
             if !minuteChartCode.isEmpty {
                 await loadMinuteData(code: minuteChartCode)
             }
         } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                isLoading = false
-            }
+            errorMessage = error.localizedDescription
+            isLoading = false
         }
     }
     
@@ -288,10 +281,8 @@ class BackgroundRefreshService {
         let yestclose = stocks.first { $0.code.lowercased() == code.lowercased() }?.yestclose ?? 0
         do {
             let data = try await StockService.shared.getMinuteData(code: code, yestclose: yestclose)
-            await MainActor.run {
-                minuteChartCode = code
-                minuteData = data
-            }
+            minuteChartCode = code
+            minuteData = data
         } catch {
             // 分时数据加载失败不影响主流程
         }
