@@ -118,51 +118,52 @@ class BackgroundRefreshService {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.restartBackgroundRefresh()
+            MainActor.assumeIsolated { self?.restartBackgroundRefresh() }
         }
-        
+
         // 监听自动刷新开关变化
         NotificationCenter.default.addObserver(
             forName: .autoRefreshDidChange,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self = self else { return }
-            if self.appSettings.autoRefreshEnabled {
-                self.startBackgroundRefresh()
-            } else {
-                self.stopBackgroundRefresh()
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+                if self.appSettings.autoRefreshEnabled {
+                    self.startBackgroundRefresh()
+                } else {
+                    self.stopBackgroundRefresh()
+                }
             }
         }
     }
-    
+
     // MARK: - 后台刷新
-    
+
     func startBackgroundRefresh() {
         guard appSettings.autoRefreshEnabled else { return }
         stopBackgroundRefresh()
-        
+
         let interval = appSettings.refreshInterval
         nextRefreshIn = Int(interval)
-        
+
         // 创建定时器 - 在主线程的 common 模式下运行，即使 UI 在交互也不会暂停
         refreshTimer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
-            self.nextRefreshIn -= 1
-            
-            // 每分钟更新一次市场状态
-            if Int(Date().timeIntervalSince1970) % 60 == 0 {
-                self.updateMarketStatus()
-            }
-            
-            if self.nextRefreshIn <= 0 {
-                self.nextRefreshIn = Int(self.appSettings.refreshInterval)
-                
-                // 检查是否应该刷新（交易时间等）
-                if self.appSettings.shouldRefresh {
-                    Task {
-                        await self.loadStockData()
+            MainActor.assumeIsolated {
+                guard let self = self else { return }
+
+                self.nextRefreshIn -= 1
+
+                // 每分钟更新一次市场状态
+                if Int(Date().timeIntervalSince1970) % 60 == 0 {
+                    self.updateMarketStatus()
+                }
+
+                if self.nextRefreshIn <= 0 {
+                    self.nextRefreshIn = Int(self.appSettings.refreshInterval)
+
+                    if self.appSettings.shouldRefresh {
+                        Task { await self.loadStockData() }
                     }
                 }
             }

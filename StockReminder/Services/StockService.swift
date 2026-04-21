@@ -727,37 +727,44 @@ class StockService {
         let (data, _) = try await URLSession.shared.data(from: url)
         guard let responseString = String(data: data, encoding: .utf8) else { return [] }
 
-        // 提取 JSON 部分
+        // 响应格式: min_data={...json...}，提取 = 后的 JSON
         guard let eqIndex = responseString.firstIndex(of: "=") else { return [] }
         let jsonStr = String(responseString[responseString.index(after: eqIndex)...])
+
+        // 实际路径: data.hk{code}.data.data = ["HHMM price cumVol cumAmount", ...]
         guard let jsonData = jsonStr.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
               let dataDict = json["data"] as? [String: Any],
               let codeDict = dataDict["hk\(cleanCode)"] as? [String: Any],
-              let dataInfo = codeDict["data"] as? [String: Any],
-              let minuteArr = dataInfo["minute"] as? [[String: Any]] else { return [] }
+              let innerData = codeDict["data"] as? [String: Any],
+              let minuteArr = innerData["data"] as? [String] else { return [] }
 
-        var runningVolume: Double = 0
-        var runningAmount: Double = 0
+        var prevCumVol: Double = 0
         return minuteArr.compactMap { item -> MinuteData? in
-            guard let time = item["time"] as? String,
-                  let priceStr = item["price"] as? String, let price = Double(priceStr),
-                  let volStr = item["volume"] as? String, let vol = Double(volStr) else { return nil }
+            // 每条格式: "HHMM price cumVol cumAmount"
+            let parts = item.split(separator: " ", maxSplits: 4)
+            guard parts.count >= 3,
+                  let price = Double(parts[1]),
+                  let cumVol = Double(parts[2]) else { return nil }
 
-            // 格式化时间 "0930" -> "09:30"
+            let timeStr = String(parts[0])
             let formattedTime: String
-            if time.count == 4 {
-                let idx = time.index(time.startIndex, offsetBy: 2)
-                formattedTime = "\(time[..<idx]):\(time[idx...])"
+            if timeStr.count == 4 {
+                let idx = timeStr.index(timeStr.startIndex, offsetBy: 2)
+                formattedTime = "\(timeStr[..<idx]):\(timeStr[idx...])"
             } else {
-                formattedTime = time
+                formattedTime = timeStr
             }
 
-            runningVolume += vol
-            runningAmount += price * vol
-            let avgPrice = runningVolume > 0 ? runningAmount / runningVolume : price
+            // 成交量是累计值，取差值得到每分钟增量
+            let perMinuteVol = max(cumVol - prevCumVol, 0)
+            prevCumVol = cumVol
 
-            return MinuteData(time: formattedTime, price: price, volume: vol, avgPrice: avgPrice)
+            // 均价 = 累计成交额 / 累计成交量
+            let cumAmount = parts.count >= 4 ? Double(parts[3]) ?? 0 : 0
+            let avgPrice = cumVol > 0 && cumAmount > 0 ? cumAmount / cumVol : price
+
+            return MinuteData(time: formattedTime, price: price, volume: perMinuteVol, avgPrice: avgPrice)
         }
     }
 
